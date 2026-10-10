@@ -1,0 +1,5 @@
+export enum MatchPhase {
+  PLACEMENT = "PLACEMENT",
+  IN_PROGRESS = "IN_PROGRESS",
+  FINISHED = "FINISHED",
+}

@@ -1,0 +1,14 @@
+import { Coordinate } from "../shared/Coordinate";
+import { Orientation } from "./Orientation";
+
+export class Ship {
+  length: number;
+  // A ship exists before it is placed (D-11), so it starts without position.
+  orientation: Orientation | null = null;
+  origin: Coordinate | null = null;
+  hits: number = 0;
+
+  constructor(length: number) {
+    this.length = length;
+  }
+}
