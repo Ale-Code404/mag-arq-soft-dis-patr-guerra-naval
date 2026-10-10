@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc",
+    "start": "tsc && node dist/apps/console.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
