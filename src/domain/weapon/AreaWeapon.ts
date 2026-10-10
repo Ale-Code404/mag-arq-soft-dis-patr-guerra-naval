@@ -10,4 +10,6 @@ export class AreaWeapon extends Weapon {
     this.rows = rows;
     this.columns = columns;
   }
+
+  attack(): void {}
 }
