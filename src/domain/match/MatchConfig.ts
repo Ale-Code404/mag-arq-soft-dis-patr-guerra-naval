@@ -24,4 +24,19 @@ export class MatchConfig {
     this.extraTurnOnHit = extraTurnOnHit;
     this.enabledWeapons = enabledWeapons;
   }
+
+  // CU-02, comments: the default configuration.
+  static defaults(): MatchConfig {
+    throw new Error("Not implemented: MatchConfig.defaults");
+  }
+
+  // CU-02, 9a: the board size is within the allowed limits.
+  isBoardSizeAllowed(): boolean {
+    throw new Error("Not implemented: MatchConfig.isBoardSizeAllowed");
+  }
+
+  // CU-02, 9b: no ship is longer than a side and the fleet fits the board.
+  fleetFitsBoard(): boolean {
+    throw new Error("Not implemented: MatchConfig.fleetFitsBoard");
+  }
 }
