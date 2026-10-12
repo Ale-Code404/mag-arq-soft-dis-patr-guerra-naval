@@ -80,6 +80,21 @@ export class MatchConfig {
       };
     }
 
+    if (!candidate.isArsenalAmmoAllowed()) {
+      return {
+        accepted: false,
+        rejection: MatchConfigRejection.ARSENAL_AMMO_OUT_OF_LIMITS,
+      };
+    }
+
+    if (!candidate.isArsenalAllowedWeapons()) {
+      return {
+        accepted: false,
+        rejection:
+          MatchConfigRejection.ARSENAL_WEAPONS_NOT_CONFIGURABLE_WEAPONS,
+      };
+    }
+
     return { accepted: true, config: candidate };
   }
 
@@ -103,8 +118,19 @@ export class MatchConfig {
     const longestShip = Math.max(...this.shipLengths);
 
     return (
-      longestShip <= this.boardSize &&
-      boardArea - fleetArea >= boardArea * 0.3
+      longestShip <= this.boardSize && boardArea - fleetArea >= boardArea * 0.3
+    );
+  }
+
+  isArsenalAmmoAllowed(): boolean {
+    const hasMinimumAmmo = this.enabledWeapons.every(([_, ammo]) => ammo >= 1);
+
+    return hasMinimumAmmo;
+  }
+
+  isArsenalAllowedWeapons(): boolean {
+    return this.enabledWeapons.every(
+      ([weapon, _]) => weapon !== WeaponType.MISSILE,
     );
   }
 }
