@@ -1,11 +1,12 @@
 import { Weapon } from "./Weapon";
+import { WeaponType } from "./WeaponType";
 
 export class AreaWeapon extends Weapon {
   rows: number;
   columns: number;
 
-  constructor(name: string, ammo: number, rows: number, columns: number) {
-    super(name, ammo);
+  constructor(type: WeaponType, ammo: number, rows: number, columns: number) {
+    super(type, ammo);
 
     this.rows = rows;
     this.columns = columns;

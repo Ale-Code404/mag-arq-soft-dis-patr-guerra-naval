@@ -1,10 +1,12 @@
+import { WeaponType } from "./WeaponType";
+
 export abstract class Weapon {
-  private name: string;
+  readonly type: WeaponType;
   private ammo: number;
   private uses: number;
 
-  constructor(name: string, ammo: number) {
-    this.name = name;
+  constructor(type: WeaponType, ammo: number) {
+    this.type = type;
     this.ammo = ammo;
     this.uses = 0;
   }

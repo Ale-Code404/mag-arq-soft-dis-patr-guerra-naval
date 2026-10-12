@@ -1,10 +1,11 @@
 import { Weapon } from "./Weapon";
+import { WeaponType } from "./WeaponType";
 
 export class ReconPlane extends Weapon {
   revealSeconds: number;
 
   constructor(ammo: number, revealSeconds: number) {
-    super("Recon plane", ammo);
+    super(WeaponType.RECON_PLANE, ammo);
 
     this.revealSeconds = revealSeconds;
   }

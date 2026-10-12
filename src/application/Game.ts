@@ -5,6 +5,7 @@ import { FirstTurn } from "../domain/match/FirstTurn";
 import { Match } from "../domain/match/Match";
 import { MatchConfig, MatchConfigResult } from "../domain/match/MatchConfig";
 import { MatchConfigBuilder } from "../domain/match/MatchConfigBuilder";
+import { MatchFactory } from "../domain/match/MatchFactory";
 import { MatchPhase } from "../domain/match/MatchPhase";
 
 export type ConfigureMatchInput = {
@@ -15,6 +16,10 @@ export type ConfigureMatchInput = {
   extraTurnOnHit?: boolean;
   enabledWeapons?: [weapon: WeaponType, ammo: number][];
 };
+
+export type StartMatchResult =
+  | { started: true; match: Match }
+  | { started: false; reason: "MATCH_IN_PROGRESS" };
 
 export class Game {
   private config: MatchConfig;
@@ -56,6 +61,18 @@ export class Game {
     }
 
     return result;
+  }
+
+  // CU-01, steps 3-4: create the match with the current configuration.
+  // Placement (CU-03, CU-11) and the first turn come next.
+  startMatch(): StartMatchResult {
+    if (this.isMatchInProgress()) {
+      return { started: false, reason: "MATCH_IN_PROGRESS" };
+    }
+
+    this.match = MatchFactory.create(this.config);
+
+    return { started: true, match: this.match };
   }
 
   private isMatchInProgress(): boolean {
