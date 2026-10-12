@@ -1,5 +1,6 @@
 import { Difficulty } from "./Difficulty";
 import { FirstTurn } from "./FirstTurn";
+import { WeaponType } from "../weapon/WeaponType";
 import { MatchConfig, MatchConfigResult } from "./MatchConfig";
 
 export class MatchConfigBuilder {
@@ -8,7 +9,7 @@ export class MatchConfigBuilder {
   private difficulty: Difficulty;
   private firstTurn: FirstTurn;
   private extraTurnOnHit: boolean;
-  private enabledWeapons: [weapon: string, ammo: number][];
+  private enabledWeapons: [weapon: WeaponType, ammo: number][];
 
   private constructor(base: MatchConfig) {
     this.boardSize = base.boardSize;
@@ -49,7 +50,7 @@ export class MatchConfigBuilder {
   }
 
   withEnabledWeapons(
-    enabledWeapons: [weapon: string, ammo: number][],
+    enabledWeapons: [weapon: WeaponType, ammo: number][],
   ): MatchConfigBuilder {
     this.enabledWeapons = enabledWeapons;
     return this;

@@ -1,3 +1,4 @@
+import { WeaponType } from "../domain/weapon/WeaponType";
 import { MatchConfigRejection } from "../domain/match/MatchConfigRejection";
 import { Difficulty } from "../domain/match/Difficulty";
 import { FirstTurn } from "../domain/match/FirstTurn";
@@ -12,7 +13,7 @@ export type ConfigureMatchInput = {
   difficulty?: Difficulty;
   firstTurn?: FirstTurn;
   extraTurnOnHit?: boolean;
-  enabledWeapons?: [weapon: string, ammo: number][];
+  enabledWeapons?: [weapon: WeaponType, ammo: number][];
 };
 
 export class Game {

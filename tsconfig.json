@@ -9,8 +9,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "src",
-    "src/apps"
-  ]
+  "include": ["src"]
 }

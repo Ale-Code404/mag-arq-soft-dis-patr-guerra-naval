@@ -1,14 +1,15 @@
 import { MatchConfigRejection } from "./MatchConfigRejection";
 import { Difficulty } from "./Difficulty";
 import { FirstTurn } from "./FirstTurn";
+import { WeaponType } from "../weapon/WeaponType";
 
-interface MathConfigInput {
+interface MatchConfigInput {
   boardSize: number;
   shipLengths: number[];
   difficulty: Difficulty;
   firstTurn: FirstTurn;
   extraTurnOnHit: boolean;
-  enabledWeapons: [weapon: string, ammo: number][];
+  enabledWeapons: [weapon: WeaponType, ammo: number][];
 }
 
 export type MatchConfigResult =
@@ -21,7 +22,7 @@ export class MatchConfig {
   readonly difficulty: Difficulty;
   readonly firstTurn: FirstTurn;
   readonly extraTurnOnHit: boolean;
-  readonly enabledWeapons: [weapon: string, ammo: number][];
+  readonly enabledWeapons: [weapon: WeaponType, ammo: number][];
 
   private constructor({
     boardSize,
@@ -30,7 +31,7 @@ export class MatchConfig {
     firstTurn,
     extraTurnOnHit,
     enabledWeapons,
-  }: MathConfigInput) {
+  }: MatchConfigInput) {
     this.boardSize = boardSize;
     this.shipLengths = shipLengths;
     this.difficulty = difficulty;
@@ -47,15 +48,15 @@ export class MatchConfig {
       firstTurn: FirstTurn.RANDOM,
       extraTurnOnHit: false,
       enabledWeapons: [
-        ["bomb", 2],
-        ["bomber", 2],
-        ["recon_plane", 2],
-        ["torpedo", 1],
+        [WeaponType.BOMB, 2],
+        [WeaponType.BOMBER, 2],
+        [WeaponType.RECON_PLANE, 2],
+        [WeaponType.TORPEDO, 1],
       ],
     });
   }
 
-  static create(input: MathConfigInput): MatchConfigResult {
+  static create(input: MatchConfigInput): MatchConfigResult {
     const candidate = new MatchConfig(input);
 
     if (!candidate.isBoardSizeAllowed()) {
@@ -99,6 +100,11 @@ export class MatchConfig {
     const boardArea = this.boardSize * this.boardSize;
     const fleetArea = this.shipLengths.reduce((acc, length) => acc + length, 0);
 
-    return boardArea - fleetArea >= boardArea * 0.3;
+    const longestShip = Math.max(...this.shipLengths);
+
+    return (
+      longestShip <= this.boardSize &&
+      boardArea - fleetArea >= boardArea * 0.3
+    );
   }
 }
