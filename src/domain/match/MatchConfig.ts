@@ -41,12 +41,17 @@ export class MatchConfig {
 
   static defaults(): MatchConfig {
     return new MatchConfig({
-      boardSize: 12,
-      shipLengths: [1, 1, 1, 2, 2, 3, 3, 4, 5],
-      difficulty: Difficulty.EASY,
+      boardSize: 8,
+      shipLengths: [5, 4, 3, 3, 2],
+      difficulty: Difficulty.NORMAL,
       firstTurn: FirstTurn.RANDOM,
-      extraTurnOnHit: true,
-      enabledWeapons: [["torpedo", 3]],
+      extraTurnOnHit: false,
+      enabledWeapons: [
+        ["bomb", 2],
+        ["bomber", 2],
+        ["recon_plane", 2],
+        ["torpedo", 1],
+      ],
     });
   }
 
@@ -60,7 +65,14 @@ export class MatchConfig {
       };
     }
 
-    if (!candidate.fleetFitsBoard()) {
+    if (!candidate.isFleetAllowed()) {
+      return {
+        accepted: false,
+        rejection: MatchConfigRejection.FLEET_SIZE_OUT_OF_LIMITS,
+      };
+    }
+
+    if (!candidate.isFleetFitsBoard()) {
       return {
         accepted: false,
         rejection: MatchConfigRejection.FLEET_DOES_NOT_FIT,
@@ -74,13 +86,19 @@ export class MatchConfig {
     return this.boardSize >= 8 && this.boardSize <= 24;
   }
 
-  fleetFitsBoard(): boolean {
+  isFleetAllowed(): boolean {
+    const hasMinimumFleetSize = this.shipLengths.length >= 5;
+    const areAllLengthsPositive = this.shipLengths.every(
+      (length) => length > 0,
+    );
+
+    return hasMinimumFleetSize && areAllLengthsPositive;
+  }
+
+  isFleetFitsBoard(): boolean {
     const boardArea = this.boardSize * this.boardSize;
     const fleetArea = this.shipLengths.reduce((acc, length) => acc + length, 0);
 
-    const hasMinimumFleetSize = this.shipLengths.length >= 5;
-    const hasMinimumArea = boardArea - fleetArea >= boardArea * 0.3;
-
-    return hasMinimumFleetSize && hasMinimumArea;
+    return boardArea - fleetArea >= boardArea * 0.3;
   }
 }

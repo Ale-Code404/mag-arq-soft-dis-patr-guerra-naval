@@ -4,12 +4,8 @@ export class Board {
   size: number;
   cells: Cell[];
 
-  constructor(size: number) {
+  constructor(size: number, cells: Cell[]) {
     this.size = size;
-    this.cells = [];
-  }
-
-  area(): number {
-    return this.size * this.size;
+    this.cells = cells;
   }
 }
