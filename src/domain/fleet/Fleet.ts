@@ -6,4 +6,8 @@ export class Fleet {
   constructor(ships: Ship[]) {
     this.ships = ships;
   }
+
+  area(): number {
+    return this.ships.reduce((acc, ship) => acc + ship.length, 0);
+  }
 }

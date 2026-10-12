@@ -1,5 +1,19 @@
+import { MatchConfigRejection } from "./MatchConfigRejection";
 import { Difficulty } from "./Difficulty";
 import { FirstTurn } from "./FirstTurn";
+
+interface MathConfigInput {
+  boardSize: number;
+  shipLengths: number[];
+  difficulty: Difficulty;
+  firstTurn: FirstTurn;
+  extraTurnOnHit: boolean;
+  enabledWeapons: [weapon: string, ammo: number][];
+}
+
+export type MatchConfigResult =
+  | { accepted: true; config: MatchConfig }
+  | { accepted: false; rejection: MatchConfigRejection };
 
 export class MatchConfig {
   readonly boardSize: number;
@@ -9,14 +23,14 @@ export class MatchConfig {
   readonly extraTurnOnHit: boolean;
   readonly enabledWeapons: [weapon: string, ammo: number][];
 
-  constructor(
-    boardSize: number,
-    shipLengths: number[],
-    difficulty: Difficulty,
-    firstTurn: FirstTurn,
-    extraTurnOnHit: boolean,
-    enabledWeapons: [weapon: string, ammo: number][],
-  ) {
+  private constructor({
+    boardSize,
+    shipLengths,
+    difficulty,
+    firstTurn,
+    extraTurnOnHit,
+    enabledWeapons,
+  }: MathConfigInput) {
     this.boardSize = boardSize;
     this.shipLengths = shipLengths;
     this.difficulty = difficulty;
@@ -25,18 +39,48 @@ export class MatchConfig {
     this.enabledWeapons = enabledWeapons;
   }
 
-  // CU-02, comments: the default configuration.
   static defaults(): MatchConfig {
-    throw new Error("Not implemented: MatchConfig.defaults");
+    return new MatchConfig({
+      boardSize: 12,
+      shipLengths: [1, 1, 1, 2, 2, 3, 3, 4, 5],
+      difficulty: Difficulty.EASY,
+      firstTurn: FirstTurn.RANDOM,
+      extraTurnOnHit: true,
+      enabledWeapons: [["torpedo", 3]],
+    });
   }
 
-  // CU-02, 9a: the board size is within the allowed limits.
+  static create(input: MathConfigInput): MatchConfigResult {
+    const candidate = new MatchConfig(input);
+
+    if (!candidate.isBoardSizeAllowed()) {
+      return {
+        accepted: false,
+        rejection: MatchConfigRejection.BOARD_SIZE_OUT_OF_LIMITS,
+      };
+    }
+
+    if (!candidate.fleetFitsBoard()) {
+      return {
+        accepted: false,
+        rejection: MatchConfigRejection.FLEET_DOES_NOT_FIT,
+      };
+    }
+
+    return { accepted: true, config: candidate };
+  }
+
   isBoardSizeAllowed(): boolean {
-    throw new Error("Not implemented: MatchConfig.isBoardSizeAllowed");
+    return this.boardSize >= 8 && this.boardSize <= 24;
   }
 
-  // CU-02, 9b: no ship is longer than a side and the fleet fits the board.
   fleetFitsBoard(): boolean {
-    throw new Error("Not implemented: MatchConfig.fleetFitsBoard");
+    const boardArea = this.boardSize * this.boardSize;
+    const fleetArea = this.shipLengths.reduce((acc, length) => acc + length, 0);
+
+    const hasMinimumFleetSize = this.shipLengths.length >= 5;
+    const hasMinimumArea = boardArea - fleetArea >= boardArea * 0.3;
+
+    return hasMinimumFleetSize && hasMinimumArea;
   }
 }
