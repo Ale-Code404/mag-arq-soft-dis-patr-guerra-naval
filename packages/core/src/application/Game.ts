@@ -7,6 +7,7 @@ import { MatchConfig, MatchConfigResult } from "../domain/match/MatchConfig";
 import { MatchConfigBuilder } from "../domain/match/MatchConfigBuilder";
 import { MatchFactory } from "../domain/match/MatchFactory";
 import { MatchPhase } from "../domain/match/MatchPhase";
+import { MatchView, toMatchView } from "./MatchView";
 
 export type ConfigureMatchInput = {
   boardSize?: number;
@@ -18,7 +19,7 @@ export type ConfigureMatchInput = {
 };
 
 export type StartMatchResult =
-  | { started: true; match: Match }
+  | { started: true; match: MatchView }
   | { started: false; reason: "MATCH_IN_PROGRESS" };
 
 export class Game {
@@ -72,7 +73,12 @@ export class Game {
 
     this.match = MatchFactory.create(this.config);
 
-    return { started: true, match: this.match };
+    return { started: true, match: toMatchView(this.match) };
+  }
+
+  // The match as the presentation may see it, or null before CU-01.
+  currentMatch(): MatchView | null {
+    return this.match === null ? null : toMatchView(this.match);
   }
 
   private isMatchInProgress(): boolean {

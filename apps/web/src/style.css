@@ -1,0 +1,157 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1d2330;
+  --muted: #5b6474;
+  --border: #d5dae2;
+  --water: #dcebf7;
+  --ship: #56627a;
+  --miss: #a9c4dc;
+  --hit: #e07a3f;
+  --sunk: #b5342b;
+  --accent: #1f5f99;
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161d;
+    --surface: #1b212b;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --border: #2f3846;
+    --water: #1d3247;
+    --ship: #8792a8;
+    --miss: #355672;
+    --hit: #e08a55;
+    --sunk: #d0473c;
+    --accent: #5aa0e0;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+  max-width: 360px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+button {
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hint,
+.message {
+  color: var(--muted);
+}
+
+.boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(calc(var(--size) + 1), minmax(18px, 32px));
+  gap: 2px;
+}
+
+.label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+.cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: var(--water);
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.cell.ship {
+  background: var(--ship);
+  color: #fff;
+}
+
+.cell.miss {
+  background: var(--miss);
+}
+
+.cell.hit {
+  background: var(--hit);
+  color: #fff;
+}
+
+.cell.sunk {
+  background: var(--sunk);
+  color: #fff;
+}

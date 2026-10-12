@@ -11,4 +11,12 @@ export class Ship {
   constructor(length: number) {
     this.length = length;
   }
+
+  isPlaced(): boolean {
+    return this.origin !== null;
+  }
+
+  isSunk(): boolean {
+    return this.hits >= this.length;
+  }
 }

@@ -2,12 +2,18 @@
   "name": "guerra-naval",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "build": "tsc",
-    "start": "tsc && node dist/apps/console.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "console": "npm run start -w @guerra-naval/console",
+    "api": "npm run dev -w @guerra-naval/api",
+    "web": "npm run dev -w @guerra-naval/web"
   },
   "devDependencies": {
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

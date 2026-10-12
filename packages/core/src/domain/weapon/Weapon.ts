@@ -20,6 +20,10 @@ export abstract class Weapon {
     this.reduceAmmo();
   }
 
+  remainingAmmo(): number {
+    return this.ammo;
+  }
+
   abstract attack(): void;
 
   private reduceAmmo(): void {
