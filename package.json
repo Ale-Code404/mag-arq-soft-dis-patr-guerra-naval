@@ -6,11 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
-    "openapi": "tsx src/infrastructure/http/exportOpenApi.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/swagger": "^9.5.2",
     "fastify": "^5.6.1"
   },
   "devDependencies": {

@@ -8,14 +8,16 @@ Juego de guerra naval por turnos, proyecto de Diseño Basado en Patrones.
 |---|---|---|
 | `src/domain` | Dominio | Entidades y reglas del juego |
 | `src/application` | Aplicación | Fachada `Game` y resultados de los casos de uso |
-| `src/infrastructure/http` | Infraestructura | API HTTP sobre `Game` y su contrato OpenAPI |
-| `web` | Presentación | Cliente Vue independiente; solo conoce `openapi.json` |
+| `src/infrastructure/http` | Infraestructura | API HTTP sobre `Game` |
+| `apps/web` | Presentación | Cliente Vue; solo habla con la API |
+| `apps/console` | Presentación | Cliente de consola; solo habla con la API |
+
+Cada aplicación de `apps` es un proyecto aparte y no importa nada de `src`.
 
 ## Uso
 
 ```sh
-npm install && npm start          # API en http://127.0.0.1:3000
-cd web && npm install && npm run dev   # vista en http://localhost:5173
+npm install && npm start                      # API en http://127.0.0.1:3000
+cd apps/web && npm install && npm run dev     # vista web en http://localhost:5173
+cd apps/console && npm install && npm start   # consola (API_URL para otra dirección)
 ```
-
-Cuando cambie la API: `npm run openapi` en la raíz y `npm run contract` en `web`.
