@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { CellState, type BoardView } from "@guerra-naval/core";
+import type { BoardView, CellState } from "../api/client";
 
 defineProps<{ title: string; board: BoardView }>();
 
 // RNF-03: each cell state has its own look and symbol.
 const symbol: Record<CellState, string> = {
-  [CellState.EMPTY]: "",
-  [CellState.SHIP]: "■",
-  [CellState.MISS]: "•",
-  [CellState.HIT]: "✕",
-  [CellState.SUNK]: "✖",
+  EMPTY: "",
+  SHIP: "■",
+  MISS: "•",
+  HIT: "✕",
+  SUNK: "✖",
 };
 
 const columnLabel = (index: number) => String.fromCharCode(65 + index);

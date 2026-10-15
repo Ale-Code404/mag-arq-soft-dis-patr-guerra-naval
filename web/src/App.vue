@@ -1,44 +1,55 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import {
-  Difficulty,
-  FirstTurn,
+  api,
+  ApiError,
+  type Difficulty,
+  type FirstTurn,
   type MatchConfig,
   type MatchView,
-  WeaponType,
-} from "@guerra-naval/core";
-import { api, ApiError } from "./api";
+  type Rejection,
+  type WeaponType,
+} from "./api/client";
 import BoardGrid from "./components/BoardGrid.vue";
 
 const config = ref<MatchConfig | null>(null);
 const match = ref<MatchView | null>(null);
 const message = ref("");
 
-const form = ref({
+const form = ref<{
+  boardSize: number;
+  difficulty: Difficulty;
+  firstTurn: FirstTurn;
+  extraTurnOnHit: boolean;
+}>({
   boardSize: 8,
-  difficulty: Difficulty.NORMAL,
-  firstTurn: FirstTurn.RANDOM,
+  difficulty: "NORMAL",
+  firstTurn: "RANDOM",
   extraTurnOnHit: false,
 });
 
-const rejectionText: Record<string, string> = {
+const rejectionText: Record<Rejection, string> = {
   BOARD_SIZE_OUT_OF_LIMITS: "El tamaño del tablero está fuera de los límites.",
   FLEET_SIZE_OUT_OF_LIMITS: "La flota no tiene el número de barcos permitido.",
   FLEET_DOES_NOT_FIT: "La flota no cabe en el tablero.",
+  ARSENAL_AMMO_OUT_OF_LIMITS: "Cada arma debe tener al menos una unidad de munición.",
+  ARSENAL_WEAPONS_NOT_CONFIGURABLE_WEAPONS: "El misil no es configurable: siempre está disponible.",
   MATCH_IN_PROGRESS: "Ya hay una partida en curso.",
 };
 
 const weaponName: Record<WeaponType, string> = {
-  [WeaponType.MISSILE]: "Misil",
-  [WeaponType.BOMB]: "Bomba",
-  [WeaponType.BOMBER]: "Avión de ataque",
-  [WeaponType.TORPEDO]: "Torpedo",
-  [WeaponType.RECON_PLANE]: "Avión de reconocimiento",
+  MISSILE: "Misil",
+  BOMB: "Bomba",
+  BOMBER: "Avión de ataque",
+  TORPEDO: "Torpedo",
+  RECON_PLANE: "Avión de reconocimiento",
 };
 
 function show(error: unknown) {
   message.value =
-    error instanceof ApiError ? (rejectionText[error.message] ?? error.message) : String(error);
+    error instanceof ApiError
+      ? (rejectionText[error.reason as Rejection] ?? error.reason)
+      : String(error);
 }
 
 function fillForm(current: MatchConfig) {
@@ -54,7 +65,7 @@ function fillForm(current: MatchConfig) {
 async function saveConfig() {
   message.value = "";
   try {
-    fillForm((await api.configure(form.value)).config);
+    fillForm(await api.configure(form.value));
     message.value = "Configuración guardada.";
   } catch (error) {
     show(error);
@@ -72,7 +83,7 @@ async function startMatch() {
 
 onMounted(async () => {
   fillForm(await api.getConfig());
-  match.value = await api.getMatch().catch(() => null);
+  match.value = await api.getMatch();
 });
 </script>
 
@@ -90,17 +101,17 @@ onMounted(async () => {
         <label>
           Dificultad
           <select v-model="form.difficulty">
-            <option :value="Difficulty.EASY">Fácil</option>
-            <option :value="Difficulty.NORMAL">Normal</option>
-            <option :value="Difficulty.HARD">Difícil</option>
+            <option value="EASY">Fácil</option>
+            <option value="NORMAL">Normal</option>
+            <option value="HARD">Difícil</option>
           </select>
         </label>
         <label>
           Primer turno
           <select v-model="form.firstTurn">
-            <option :value="FirstTurn.HUMAN">Jugador</option>
-            <option :value="FirstTurn.BOT">Oponente</option>
-            <option :value="FirstTurn.RANDOM">Al azar</option>
+            <option value="HUMAN">Jugador</option>
+            <option value="BOT">Oponente</option>
+            <option value="RANDOM">Al azar</option>
           </select>
         </label>
         <label class="check">

@@ -2,17 +2,19 @@
   "name": "guerra-naval",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "type": "module",
   "scripts": {
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "console": "npm run start -w @guerra-naval/console",
-    "api": "npm run dev -w @guerra-naval/api",
-    "web": "npm run dev -w @guerra-naval/web"
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "openapi": "tsx src/infrastructure/http/exportOpenApi.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.5.2",
+    "fastify": "^5.6.1"
   },
   "devDependencies": {
+    "@types/node": "^22.18.12",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
