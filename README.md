@@ -21,3 +21,8 @@ npm install && npm start                      # API en http://127.0.0.1:3000
 cd apps/web && npm install && npm run dev     # vista web en http://localhost:5173
 cd apps/console && npm install && npm start   # consola (API_URL para otra dirección)
 ```
+
+En ambos clientes las filas se nombran con letras (A, B, ...) y las columnas con
+números desde 1: «C4» es la fila 2, columna 3 de la API (base 0). Un barco se
+ubica por su extremo izquierdo o superior, y un arma apunta a la esquina
+superior izquierda de su área.

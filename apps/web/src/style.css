@@ -10,6 +10,8 @@
   --hit: #e07a3f;
   --sunk: #b5342b;
   --accent: #1f5f99;
+  --spotted: #e3b341;
+  --clear: #c9d6e2;
   font-family: system-ui, sans-serif;
   color: var(--text);
 }
@@ -27,6 +29,8 @@
     --hit: #e08a55;
     --sunk: #d0473c;
     --accent: #5aa0e0;
+    --spotted: #c99a2e;
+    --clear: #2a3b4d;
   }
 }
 
@@ -154,4 +158,120 @@ button.primary {
 .cell.sunk {
   background: var(--sunk);
   color: #fff;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+button.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.message {
+  color: var(--text);
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+}
+
+.ships {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  margin-left: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tag.done {
+  color: var(--accent);
+}
+
+.weapons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.weapon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.weapon small {
+  display: block;
+  color: var(--muted);
+}
+
+.weapon.empty {
+  opacity: 0.5;
+}
+
+.grid.clickable .cell {
+  cursor: pointer;
+}
+
+.grid.clickable .cell:hover {
+  outline: 2px solid var(--accent);
+}
+
+.cell.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.cell.spotted {
+  background: var(--spotted);
+  color: #1d2330;
+  font-weight: bold;
+}
+
+.cell.clear {
+  background: var(--clear);
+}
+
+.result.won h2 {
+  color: var(--accent);
+}
+
+.result.lost h2 {
+  color: var(--sunk);
+}
+
+.log {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.log .opponent {
+  color: var(--muted);
+}
+
+.log .turn {
+  display: inline-block;
+  min-width: 2.5em;
+  color: var(--muted);
 }
