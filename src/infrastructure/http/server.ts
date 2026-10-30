@@ -1,5 +1,7 @@
-import Fastify, { FastifyInstance } from "fastify";
-import { ConfigureMatchInput, Game } from "../../application/Game";
+import Fastify, { FastifyInstance, FastifyReply } from "fastify";
+import { ActionResult, ConfigureMatchInput, Game } from "../../application/Game";
+import { Orientation } from "../../domain/fleet/Orientation";
+import { MatchRejection } from "../../domain/match/MatchRejection";
 import { MatchConfig } from "../../domain/match/MatchConfig";
 import { MatchConfigRejection } from "../../domain/match/MatchConfigRejection";
 import { WeaponType } from "../../domain/weapon/WeaponType";
@@ -22,6 +24,19 @@ function toDto(config: MatchConfig) {
     ...config,
     enabledWeapons: config.enabledWeapons.map(([type, ammo]) => ({ type, ammo })),
   };
+}
+
+type PlaceShipBody = { row: number; column: number; orientation: Orientation };
+type ShotBody = { weapon: WeaponType; row: number; column: number };
+
+// 404 without a match, 409 when the phase does not allow the action, 422 when
+// the action breaks a game rule.
+function send(reply: FastifyReply, result: ActionResult) {
+  if (result.ok) return reply.send(result);
+
+  const status =
+    result.rejection === "NO_MATCH" ? 404 : result.rejection === MatchRejection.WRONG_PHASE ? 409 : 422;
+  return reply.code(status).send(result);
 }
 
 // Input adapter: translates HTTP requests into calls to the Game facade, and
@@ -53,6 +68,34 @@ export function buildServer(game: Game): FastifyInstance {
     if (match === null) return reply.code(404).send({ reason: "NO_MATCH" });
     return match;
   });
+
+  // CU-03, steps 2-4: place or move one ship of the Jugador.
+  app.put<{ Params: { index: string }; Body: PlaceShipBody }>(
+    "/api/match/ships/:index",
+    async (request, reply) => {
+      const { row, column, orientation } = request.body ?? {};
+      return send(reply, game.placeShip(Number(request.params.index), row, column, orientation));
+    },
+  );
+
+  // CU-03, 5a.
+  app.delete<{ Params: { index: string } }>("/api/match/ships/:index", async (request, reply) =>
+    send(reply, game.removeShip(Number(request.params.index))),
+  );
+
+  // CU-03, steps 5-7, and CU-01, steps 6-7.
+  app.post("/api/match/placement", async (_request, reply) => send(reply, game.confirmPlacement()));
+
+  // CU-04, with CU-12 and CU-06.
+  app.post<{ Body: ShotBody }>("/api/match/shots", async (request, reply) => {
+    const { weapon, row, column } = request.body ?? {};
+    return send(reply, await game.fire(weapon, row, column));
+  });
+
+  // CU-06, steps 5-6, or cancelling a match.
+  app.delete("/api/match", async (_request, reply) =>
+    game.closeMatch() ? reply.code(204).send() : reply.code(404).send({ reason: "NO_MATCH" }),
+  );
 
   return app;
 }

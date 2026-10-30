@@ -9,4 +9,14 @@ export class Cell {
   constructor(position: Coordinate) {
     this.position = position;
   }
+
+  // D-12: the attack reaches the cell first, and the cell tells its ship.
+  receiveAttack(): boolean {
+    this.attacked = true;
+
+    if (this.ship === null) return false;
+
+    this.ship.hit();
+    return true;
+  }
 }

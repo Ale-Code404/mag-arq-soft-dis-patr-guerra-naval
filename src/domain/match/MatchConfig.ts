@@ -59,6 +59,10 @@ export class MatchConfig {
   static create(input: MatchConfigInput): MatchConfigResult {
     const candidate = new MatchConfig(input);
 
+    if (!candidate.hasKnownValues()) {
+      return { accepted: false, rejection: MatchConfigRejection.INVALID_VALUE };
+    }
+
     if (!candidate.isBoardSizeAllowed()) {
       return {
         accepted: false,
@@ -96,6 +100,25 @@ export class MatchConfig {
     }
 
     return { accepted: true, config: candidate };
+  }
+
+  // The input may come from outside the process (an HTTP body), where the
+  // types are not checked: an unknown value is rejected before any rule.
+  hasKnownValues(): boolean {
+    const isOneOf = (values: object, value: unknown) => Object.values(values).includes(value);
+
+    return (
+      Number.isInteger(this.boardSize) &&
+      Array.isArray(this.shipLengths) &&
+      this.shipLengths.every((length) => Number.isInteger(length)) &&
+      isOneOf(Difficulty, this.difficulty) &&
+      isOneOf(FirstTurn, this.firstTurn) &&
+      typeof this.extraTurnOnHit === "boolean" &&
+      Array.isArray(this.enabledWeapons) &&
+      this.enabledWeapons.every(
+        ([weapon, ammo]) => isOneOf(WeaponType, weapon) && Number.isInteger(ammo),
+      )
+    );
   }
 
   isBoardSizeAllowed(): boolean {

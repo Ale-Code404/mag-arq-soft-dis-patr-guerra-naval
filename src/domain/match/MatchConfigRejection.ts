@@ -1,5 +1,7 @@
 export enum MatchConfigRejection {
   MATCH_IN_PROGRESS = "MATCH_IN_PROGRESS",
+  // A value outside its type: an unknown difficulty, first turn or weapon.
+  INVALID_VALUE = "INVALID_VALUE",
   BOARD_SIZE_OUT_OF_LIMITS = "BOARD_SIZE_OUT_OF_LIMITS",
 
   FLEET_DOES_NOT_FIT = "FLEET_DOES_NOT_FIT",

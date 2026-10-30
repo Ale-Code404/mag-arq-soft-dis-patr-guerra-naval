@@ -6,4 +6,8 @@ export class Coordinate {
     this.row = row;
     this.column = column;
   }
+
+  equals(other: Coordinate): boolean {
+    return this.row === other.row && this.column === other.column;
+  }
 }

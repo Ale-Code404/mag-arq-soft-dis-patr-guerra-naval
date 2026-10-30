@@ -12,6 +12,20 @@ export class Ship {
     this.length = length;
   }
 
+  placeAt(origin: Coordinate, orientation: Orientation): void {
+    this.origin = origin;
+    this.orientation = orientation;
+  }
+
+  unplace(): void {
+    this.origin = null;
+    this.orientation = null;
+  }
+
+  hit(): void {
+    this.hits++;
+  }
+
   isPlaced(): boolean {
     return this.origin !== null;
   }
