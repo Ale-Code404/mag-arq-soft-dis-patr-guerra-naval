@@ -48,7 +48,7 @@ const form = ref<{
 const rejectionText: Record<Rejection, string> = {
   BOARD_SIZE_OUT_OF_LIMITS: "El tamaño del tablero está fuera de los límites.",
   FLEET_SIZE_OUT_OF_LIMITS: "La flota no tiene el número de barcos permitido.",
-  FLEET_DOES_NOT_FIT: "La flota no cabe en el tablero.",
+  FLEET_DOES_NOT_FIT: "La flota ocupa más del 30 % del tablero o tiene un barco más largo que el tablero.",
   ARSENAL_AMMO_OUT_OF_LIMITS: "Cada arma debe tener al menos una unidad de munición.",
   ARSENAL_WEAPONS_NOT_CONFIGURABLE_WEAPONS: "El misil no es configurable: siempre está disponible.",
   MATCH_IN_PROGRESS: "Ya hay una partida en curso.",

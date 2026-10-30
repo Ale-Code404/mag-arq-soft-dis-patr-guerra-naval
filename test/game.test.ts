@@ -157,6 +157,14 @@ test("unknown values are rejected by the configuration", () => {
   assert.deepEqual(result, { accepted: false, rejection: MatchConfigRejection.INVALID_VALUE });
 });
 
+test("the fleet takes at most 30 % of the board (CU-02, step 9)", () => {
+  const game = new Game();
+  const atLimit = game.configureMatch({ boardSize: 10, shipLengths: [6, 6, 6, 6, 6] });
+  assert.ok(atLimit.accepted);
+  const overLimit = game.configureMatch({ boardSize: 10, shipLengths: [6, 6, 6, 6, 7] });
+  assert.deepEqual(overLimit, { accepted: false, rejection: MatchConfigRejection.FLEET_DOES_NOT_FIT });
+});
+
 test("the same seed plays the same match", async () => {
   const play = async () => {
     const { game } = newGame(FirstTurn.RANDOM);

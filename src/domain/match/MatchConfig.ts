@@ -140,9 +140,9 @@ export class MatchConfig {
 
     const longestShip = Math.max(...this.shipLengths);
 
-    return (
-      longestShip <= this.boardSize && boardArea - fleetArea >= boardArea * 0.3
-    );
+    // The fleet takes at most 30 % of the board, so the opponent can always
+    // place it at random (CU-11).
+    return longestShip <= this.boardSize && fleetArea <= boardArea * 0.3;
   }
 
   isArsenalAmmoAllowed(): boolean {
