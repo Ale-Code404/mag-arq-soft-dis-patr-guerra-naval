@@ -43,13 +43,15 @@ export class Board {
   }
 
   // The rectangle with its top-left corner at origin, or null if any cell
-  // falls outside the board. Ships and weapons share it (D-19).
+  // falls outside the board. Weapons use it (D-19).
   area(origin: Coordinate, rows: number, columns: number): Cell[] | null {
     const cells: Cell[] = [];
 
     for (let row = 0; row < rows; row++) {
       for (let column = 0; column < columns; column++) {
-        const cell = this.cellAt(new Coordinate(origin.row + row, origin.column + column));
+        const cell = this.cellAt(
+          new Coordinate(origin.row + row, origin.column + column),
+        );
         if (cell === null) return null;
         cells.push(cell);
       }
@@ -62,18 +64,26 @@ export class Board {
     return this.cells.filter((cell) => cell.position.row === index);
   }
 
-  // CU-03, steps 3-4: inside the board and without overlapping another ship.
-  place(ship: Ship, origin: Coordinate, orientation: Orientation): PlacementRejection | null {
-    const horizontal = orientation === Orientation.HORIZONTAL;
-    const cells = this.area(origin, horizontal ? 1 : ship.length, horizontal ? ship.length : 1);
+  // CU-03, steps 3-4: inside the board, without overlapping another ship and
+  // keeping the margin around it free of other ships.
+  place(
+    ship: Ship,
+    origin: Coordinate,
+    orientation: Orientation,
+  ): PlacementRejection | null {
+    const cells = ship.area(origin, orientation).map((position) => this.cellAt(position));
+    if (cells.includes(null)) return PlacementRejection.OUT_OF_BOARD;
 
-    if (cells === null) return PlacementRejection.OUT_OF_BOARD;
-    if (cells.some((cell) => cell.ship !== null && cell.ship !== ship)) {
-      return PlacementRejection.OVERLAP;
+    // The ship may be moved over its own cells.
+    const holdsOther = (cell: Cell | null) => cell !== null && cell.ship !== null && cell.ship !== ship;
+
+    if (cells.some(holdsOther)) return PlacementRejection.OVERLAP;
+    if (ship.surroundings(origin, orientation).map((p) => this.cellAt(p)).some(holdsOther)) {
+      return PlacementRejection.TOO_CLOSE;
     }
 
     this.remove(ship);
-    cells.forEach((cell) => (cell.ship = ship));
+    cells.forEach((cell) => (cell!.ship = ship));
     ship.placeAt(origin, orientation);
 
     return null;
@@ -81,7 +91,9 @@ export class Board {
 
   // CU-03, 5a: the ship goes back to the pending ones.
   remove(ship: Ship): void {
-    this.cells.filter((cell) => cell.ship === ship).forEach((cell) => (cell.ship = null));
+    this.cells
+      .filter((cell) => cell.ship === ship)
+      .forEach((cell) => (cell.ship = null));
     ship.unplace();
   }
 }

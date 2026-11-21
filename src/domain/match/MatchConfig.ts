@@ -2,6 +2,7 @@ import { MatchConfigRejection } from "./MatchConfigRejection";
 import { Difficulty } from "./Difficulty";
 import { FirstTurn } from "./FirstTurn";
 import { WeaponType } from "../weapon/WeaponType";
+import { Ship } from "../fleet/Ship";
 
 interface MatchConfigInput {
   boardSize: number;
@@ -140,9 +141,25 @@ export class MatchConfig {
 
     const longestShip = Math.max(...this.shipLengths);
 
+    // Each ship plus its margin on one side and one end cannot share cells
+    // with another's, so together they must fit in a board grown by the margin
+    // (CU-03, 3c). Without this, small ships could pass the 30 % and still
+    // have no room to keep apart. Up to 75 % of that board the opponent placed
+    // every fleet tried at random; around 80 % it starts to fail (CU-11).
+    const margin = Ship.DEFAULT_MARGIN;
+    const spacedArea = this.shipLengths.reduce(
+      (acc, length) => acc + (length + margin) * (1 + margin),
+      0,
+    );
+    const spacedBoardArea = (this.boardSize + margin) ** 2;
+
     // The fleet takes at most 30 % of the board, so the opponent can always
     // place it at random (CU-11).
-    return longestShip <= this.boardSize && fleetArea <= boardArea * 0.3;
+    return (
+      longestShip <= this.boardSize &&
+      fleetArea <= boardArea * 0.3 &&
+      spacedArea <= spacedBoardArea * 0.75
+    );
   }
 
   isArsenalAmmoAllowed(): boolean {

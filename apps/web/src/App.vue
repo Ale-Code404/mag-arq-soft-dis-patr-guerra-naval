@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
   api,
   ApiError,
@@ -10,13 +10,16 @@ import {
   type MatchView,
   type Orientation,
   type OutcomeType,
+  type Position,
   type Rejection,
   type ShipView,
   type TurnView,
   type WeaponType,
 } from "./api/client";
 import BoardGrid from "./components/BoardGrid.vue";
+import { canAttack, weaponArea as areaOf } from "./areas";
 import { cellKey, cellLabel } from "./coordinates";
+import { turnEffect, type CellEffect } from "./effects";
 
 // D-17: recon results stay visible for 10 seconds; the timer lives here.
 const RECON_VISIBLE_MS = 10_000;
@@ -33,6 +36,15 @@ const selectedWeapon = ref<WeaponType>("MISSILE");
 const recon = ref(new Map<string, OutcomeType>());
 let reconTimer: ReturnType<typeof setTimeout> | undefined;
 
+// Attack animations, one turn at a time, on the board that received it.
+const ownEffects = ref(new Map<string, CellEffect>());
+const rivalEffects = ref(new Map<string, CellEffect>());
+const animating = ref(false);
+let playback: Promise<void> = Promise.resolve();
+// Bumped when the match is closed, so a pending playback stops.
+let playbackId = 0;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 const form = ref<{
   boardSize: number;
   difficulty: Difficulty;
@@ -48,7 +60,8 @@ const form = ref<{
 const rejectionText: Record<Rejection, string> = {
   BOARD_SIZE_OUT_OF_LIMITS: "El tamaño del tablero está fuera de los límites.",
   FLEET_SIZE_OUT_OF_LIMITS: "La flota no tiene el número de barcos permitido.",
-  FLEET_DOES_NOT_FIT: "La flota ocupa más del 30 % del tablero o tiene un barco más largo que el tablero.",
+  FLEET_DOES_NOT_FIT:
+    "La flota ocupa más del 30 % del tablero, no deja sitio para separar los barcos o tiene un barco más largo que el tablero.",
   ARSENAL_AMMO_OUT_OF_LIMITS: "Cada arma debe tener al menos una unidad de munición.",
   ARSENAL_WEAPONS_NOT_CONFIGURABLE_WEAPONS: "El misil no es configurable: siempre está disponible.",
   MATCH_IN_PROGRESS: "Ya hay una partida en curso.",
@@ -57,6 +70,7 @@ const rejectionText: Record<Rejection, string> = {
   WRONG_PHASE: "Esa acción no está permitida en esta fase de la partida.",
   OUT_OF_BOARD: "El barco se sale del tablero.",
   OVERLAP: "El barco se superpone con otro.",
+  TOO_CLOSE: "El barco debe quedar a una casilla de los demás, también en diagonal.",
   UNKNOWN_SHIP: "Ese barco no existe.",
   UNKNOWN_ORIENTATION: "Orientación desconocida.",
   FLEET_NOT_PLACED: "Faltan barcos por ubicar.",
@@ -92,14 +106,54 @@ const selectedCells = computed(() => {
   return new Set(ship ? shipCells(ship) : []);
 });
 
+// Cell under the pointer on the rival board, to preview the weapon's area.
+const aimed = ref<Position | null>(null);
+
+const aiming = computed(() => match.value?.phase === "IN_PROGRESS" && !animating.value);
+
+const preview = computed(() => {
+  if (!aiming.value || !aimed.value || !match.value) return { cells: new Set<string>(), valid: false };
+  const board = match.value.rivalBoard;
+  const { cells } = areaOf(selectedWeapon.value, aimed.value, board.size);
+  return {
+    cells: new Set(cells.map(cellKey)),
+    valid: canAttack(selectedWeapon.value, aimed.value, board),
+  };
+});
+
+// Cell under the pointer on the own board, to preview the selected ship there.
+const anchored = ref<Position | null>(null);
+
+// CU-03, steps 3-4, as the API checks them: inside the board, without
+// overlapping or touching another ship, diagonals included (3c). The selected
+// ship may be moved over its own cells.
+const placementPreview = computed(() => {
+  const ship = selectedShip.value === null ? undefined : match.value?.fleet[selectedShip.value];
+  if (match.value?.phase !== "PLACEMENT" || !ship || !anchored.value) {
+    return { cells: new Set<string>(), valid: false };
+  }
+  const board = match.value.ownBoard;
+  const all = shipPositions(ship.length, anchored.value, orientation.value);
+  const inside = all.filter(({ row, column }) => row < board.size && column < board.size);
+  const holdsOther = ({ row, column }: Position) =>
+    board.cells[row]?.[column] === "SHIP" && !selectedCells.value.has(cellKey({ row, column }));
+  const touches = inside.some(({ row, column }) =>
+    [-1, 0, 1].some((dr) => [-1, 0, 1].some((dc) => holdsOther({ row: row + dr, column: column + dc }))),
+  );
+  return { cells: new Set(inside.map(cellKey)), valid: inside.length === all.length && !touches };
+});
+
 // Newest first, so the latest answer of the opponent is on top.
 const lastTurns = computed(() => [...turns.value].reverse().slice(0, 10));
 
 function shipCells(ship: ShipView): string[] {
-  if (!ship.origin) return [];
-  const { row, column } = ship.origin;
-  return Array.from({ length: ship.length }, (_, i) =>
-    ship.orientation === "VERTICAL" ? cellKey({ row: row + i, column }) : cellKey({ row, column: column + i }),
+  if (!ship.origin || !ship.orientation) return [];
+  return shipPositions(ship.length, ship.origin, ship.orientation).map(cellKey);
+}
+
+function shipPositions(length: number, { row, column }: Position, along: Orientation): Position[] {
+  return Array.from({ length }, (_, i) =>
+    along === "VERTICAL" ? { row: row + i, column } : { row, column: column + i },
   );
 }
 
@@ -144,6 +198,36 @@ function apply(result: ActionResult) {
   for (const turn of result.turns) {
     if (turn.side === "PLAYER" && turn.weapon === "RECON_PLANE") showRecon(turn);
   }
+  if (!reducedMotion && result.turns.length > 0) animate(result.turns, result.match.ownBoard.size);
+}
+
+// Queues the turns so the opponent's answer plays after the Jugador's attack.
+function animate(played: TurnView[], boardSize: number) {
+  const id = playbackId;
+  animating.value = true;
+  playback = playback.then(async () => {
+    for (const turn of played) {
+      if (id !== playbackId) return;
+      const { cells, duration } = turnEffect(turn, boardSize);
+      const target = turn.side === "PLAYER" ? rivalEffects : ownEffects;
+      // Cleared first so a cell hit twice in a row restarts its animation.
+      target.value = new Map();
+      await nextTick();
+      await new Promise(requestAnimationFrame);
+      target.value = cells;
+      await new Promise((resolve) => setTimeout(resolve, duration));
+      target.value = new Map();
+    }
+    if (id === playbackId) animating.value = false;
+  });
+}
+
+function stopAnimations() {
+  playbackId++;
+  playback = Promise.resolve();
+  ownEffects.value = new Map();
+  rivalEffects.value = new Map();
+  animating.value = false;
 }
 
 // D-17: SPOTTED/CLEAR are drawn over the rival board, then hidden.
@@ -174,6 +258,7 @@ const saveConfig = () =>
 const startMatch = () =>
   run(async () => {
     match.value = await api.startMatch();
+    stopAnimations();
     turns.value = [];
     saved.value = null;
     orientation.value = "HORIZONTAL";
@@ -188,6 +273,13 @@ function selectShip(index: number) {
 
 function toggleOrientation() {
   orientation.value = orientation.value === "HORIZONTAL" ? "VERTICAL" : "HORIZONTAL";
+}
+
+// "R" rotates the ship while placing, without leaving the board.
+function onKeydown(event: KeyboardEvent) {
+  if (match.value?.phase !== "PLACEMENT" || event.key.toLowerCase() !== "r") return;
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+  toggleOrientation();
 }
 
 // CU-03, steps 2-4: place or move the selected ship with its origin on the cell.
@@ -219,6 +311,7 @@ const confirmFleet = () =>
 // CU-04, step 1: the target is the top-left cell of the weapon's area.
 const fireAt = (row: number, column: number) =>
   run(async () => {
+    if (animating.value) return;
     apply(await api.fire(selectedWeapon.value, { row, column }));
     const weapon = match.value?.arsenal.find((w) => w.type === selectedWeapon.value);
     if (weapon?.ammo === 0) selectedWeapon.value = "MISSILE";
@@ -228,6 +321,7 @@ const fireAt = (row: number, column: number) =>
 const closeMatch = () =>
   run(async () => {
     await api.closeMatch();
+    stopAnimations();
     clearTimeout(reconTimer);
     recon.value = new Map();
     match.value = null;
@@ -237,12 +331,17 @@ const closeMatch = () =>
   });
 
 onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
   fillForm(await api.getConfig());
   match.value = await api.getMatch();
   if (match.value?.phase === "PLACEMENT") selectedShip.value = firstPendingShip(match.value);
 });
 
-onUnmounted(() => clearTimeout(reconTimer));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeydown);
+  clearTimeout(reconTimer);
+  stopAnimations();
+});
 </script>
 
 <template>
@@ -294,7 +393,8 @@ onUnmounted(() => clearTimeout(reconTimer));
         <h2>Ubica tu flota</h2>
         <p class="hint">
           Elige un barco, su orientación y pulsa la casilla de tu tablero donde empieza
-          (extremo izquierdo o superior).
+          (extremo izquierdo o superior). Al pasar el puntero verás dónde quedaría; en rojo, si no
+          cabe o queda pegado a otro barco (deja una casilla libre, también en diagonal). Pulsa «R» para girarlo.
         </p>
         <ul class="ships">
           <li v-for="(ship, index) in match.fleet" :key="index">
@@ -333,6 +433,7 @@ onUnmounted(() => clearTimeout(reconTimer));
         <h2>Batalla</h2>
         <p class="hint">
           Elige un arma y pulsa una casilla del tablero rival (esquina superior izquierda del área).
+          Al pasar el puntero verás el área que cubre; en rojo, si ese ataque no es válido.
           Barcos rivales a flote: <strong>{{ match.rivalShipsAfloat }}</strong>.
         </p>
         <div class="weapons">
@@ -375,13 +476,23 @@ onUnmounted(() => clearTimeout(reconTimer));
           :board="match.ownBoard"
           :clickable="match.phase === 'PLACEMENT'"
           :highlight="selectedCells"
+          :effects="ownEffects"
+          :preview="placementPreview.cells"
+          :preview-invalid="!placementPreview.valid"
           @cell-click="placeAt"
+          @cell-hover="(row, column) => (anchored = { row, column })"
+          @hover-end="anchored = null"
         />
         <BoardGrid
           title="Tablero rival"
           :board="match.rivalBoard"
-          :clickable="match.phase === 'IN_PROGRESS'"
+          :clickable="aiming"
           :overlay="recon"
+          :effects="rivalEffects"
+          :preview="preview.cells"
+          :preview-invalid="!preview.valid"
+          @cell-hover="(row, column) => (aimed = { row, column })"
+          @hover-end="aimed = null"
           @cell-click="fireAt"
         />
       </div>

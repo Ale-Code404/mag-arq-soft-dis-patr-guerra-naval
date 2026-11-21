@@ -7,8 +7,11 @@ import { Weapon } from "../weapon/Weapon";
 import { Player } from "./Player";
 import { ShotRequest } from "./Shot";
 
-// CU-11, 3a1: attempts per ship before giving up on the random placement.
+// CU-11, 3a1: attempts per ship, and of the whole fleet, before giving up on
+// the random placement. With the margin between ships (CU-03, 3c) an unlucky
+// early ship can leave no room for a later one, so the fleet starts over.
 const PLACEMENT_ATTEMPTS = 1000;
+const FLEET_ATTEMPTS = 20;
 
 export class BotPlayer extends Player {
   hitProbability: number;
@@ -34,14 +37,12 @@ export class BotPlayer extends Player {
   // CU-11: a random origin and orientation per ship, validated with the same
   // rules as the Jugador. If a ship never fits, the fleet is left unplaced.
   placeFleet(): boolean {
-    for (let index = 0; index < this.fleet.ships.length; index++) {
-      if (!this.placeAtRandom(index)) {
-        this.fleet.ships.forEach((_, i) => this.removeShip(i));
-        return false;
-      }
+    for (let attempt = 0; attempt < FLEET_ATTEMPTS; attempt++) {
+      if (this.fleet.ships.every((_, index) => this.placeAtRandom(index))) return true;
+      this.fleet.ships.forEach((_, i) => this.removeShip(i));
     }
 
-    return true;
+    return false;
   }
 
   // D-20: a random damaging weapon with ammo; the level's probability decides

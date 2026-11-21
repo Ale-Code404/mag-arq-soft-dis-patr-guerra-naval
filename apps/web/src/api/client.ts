@@ -70,6 +70,7 @@ export type Rejection =
   | "WRONG_PHASE"
   | "OUT_OF_BOARD"
   | "OVERLAP"
+  | "TOO_CLOSE"
   | "UNKNOWN_SHIP"
   | "UNKNOWN_ORIENTATION"
   | "FLEET_NOT_PLACED"

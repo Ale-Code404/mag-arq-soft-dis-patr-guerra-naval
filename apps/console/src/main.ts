@@ -44,7 +44,8 @@ const phaseName: Record<MatchView["phase"], string> = {
 const rejectionText: Record<string, string> = {
   BOARD_SIZE_OUT_OF_LIMITS: "el tamaño del tablero está fuera de los límites",
   FLEET_SIZE_OUT_OF_LIMITS: "la flota no tiene el número de barcos permitido",
-  FLEET_DOES_NOT_FIT: "la flota ocupa más del 30 % del tablero o tiene un barco más largo que el tablero",
+  FLEET_DOES_NOT_FIT:
+    "la flota ocupa más del 30 % del tablero, no deja sitio para separar los barcos o tiene un barco más largo que el tablero",
   ARSENAL_AMMO_OUT_OF_LIMITS: "cada arma debe tener al menos una unidad de munición",
   ARSENAL_WEAPONS_NOT_CONFIGURABLE_WEAPONS: "el misil no es configurable",
   MATCH_IN_PROGRESS: "ya hay una partida en curso",
@@ -53,6 +54,7 @@ const rejectionText: Record<string, string> = {
   WRONG_PHASE: "esa acción no está permitida en esta fase",
   OUT_OF_BOARD: "el barco se sale del tablero",
   OVERLAP: "el barco se superpone con otro",
+  TOO_CLOSE: "el barco debe quedar a una casilla de los demás, también en diagonal",
   UNKNOWN_SHIP: "ese barco no existe",
   UNKNOWN_ORIENTATION: "orientación desconocida",
   FLEET_NOT_PLACED: "faltan barcos por ubicar",

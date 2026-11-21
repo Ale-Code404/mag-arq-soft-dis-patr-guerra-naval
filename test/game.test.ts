@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Game } from "../src/application/Game";
 import { CellState } from "../src/application/MatchView";
+import { Board } from "../src/domain/board/Board";
 import { PlacementRejection } from "../src/domain/board/PlacementRejection";
+import { Fleet } from "../src/domain/fleet/Fleet";
+import { Ship } from "../src/domain/fleet/Ship";
 import { Orientation } from "../src/domain/fleet/Orientation";
 import { FirstTurn } from "../src/domain/match/FirstTurn";
 import { MatchConfigRejection } from "../src/domain/match/MatchConfigRejection";
@@ -11,14 +14,18 @@ import { MatchRejection } from "../src/domain/match/MatchRejection";
 import { OutcomeType } from "../src/domain/weapon/OutcomeType";
 import { WeaponRejection } from "../src/domain/weapon/WeaponRejection";
 import { WeaponType } from "../src/domain/weapon/WeaponType";
+import { BotPlayer } from "../src/domain/player/BotPlayer";
 import { InMemoryMatchRepository, seeded } from "./support";
 
-// The default fleet [5, 4, 3, 3, 2], one ship per row from column 0.
+// The default fleet [5, 4, 3, 3, 2] on rows A, C, E and G, with a free cell
+// between ships (CU-03, 3c).
+const DEFAULT_FLEET_ORIGINS: [row: number, column: number][] = [[0, 0], [2, 0], [4, 0], [6, 0], [6, 4]];
+
 function placeDefaultFleet(game: Game): void {
-  for (let index = 0; index < 5; index++) {
-    const result = game.placeShip(index, index, 0, Orientation.HORIZONTAL);
+  DEFAULT_FLEET_ORIGINS.forEach(([row, column], index) => {
+    const result = game.placeShip(index, row, column, Orientation.HORIZONTAL);
     assert.ok(result.ok, `ship ${index}`);
-  }
+  });
 }
 
 function newGame(firstTurn = FirstTurn.HUMAN) {
@@ -92,7 +99,7 @@ test("each phase only accepts its own actions (State)", async () => {
   });
 });
 
-test("placements outside the board or overlapping are rejected (CU-03, 3a and 3b)", () => {
+test("placements outside the board, overlapping or touching are rejected (CU-03, 3a to 3c)", () => {
   const { game } = newGame();
 
   assert.deepEqual(game.placeShip(0, 0, 5, Orientation.HORIZONTAL), {
@@ -104,6 +111,18 @@ test("placements outside the board or overlapping are rejected (CU-03, 3a and 3b
     ok: false,
     rejection: PlacementRejection.OVERLAP,
   });
+
+  // 3c: ships keep a free cell between them, diagonals included.
+  assert.deepEqual(game.placeShip(1, 1, 0, Orientation.HORIZONTAL), {
+    ok: false,
+    rejection: PlacementRejection.TOO_CLOSE,
+  });
+  assert.deepEqual(game.placeShip(4, 1, 5, Orientation.HORIZONTAL), {
+    ok: false,
+    rejection: PlacementRejection.TOO_CLOSE,
+  });
+  assert.ok(game.placeShip(1, 2, 0, Orientation.HORIZONTAL).ok);
+  assert.ok(game.placeShip(4, 0, 6, Orientation.HORIZONTAL).ok);
 
   // 5a: a removed ship goes back to the pending ones.
   const removed = game.removeShip(0);
@@ -163,6 +182,33 @@ test("the fleet takes at most 30 % of the board (CU-02, step 9)", () => {
   assert.ok(atLimit.accepted);
   const overLimit = game.configureMatch({ boardSize: 10, shipLengths: [6, 6, 6, 6, 7] });
   assert.deepEqual(overLimit, { accepted: false, rejection: MatchConfigRejection.FLEET_DOES_NOT_FIT });
+});
+
+test("a fleet without room to keep its ships apart does not fit (CU-03, 3c)", () => {
+  const game = new Game();
+  // 19 cells are under 30 % of 8 x 8, but at most 16 lone cells fit apart.
+  const result = game.configureMatch({ shipLengths: Array(19).fill(1) });
+  assert.deepEqual(result, { accepted: false, rejection: MatchConfigRejection.FLEET_DOES_NOT_FIT });
+});
+
+test("the opponent keeps its ships apart (CU-11)", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const board = Board.empty(8);
+    const fleet = new Fleet([5, 4, 3, 3, 2].map((length) => new Ship(length)));
+    const bot = new BotPlayer("Bot", board, fleet, [], 0, Board.empty(8), seeded(seed));
+    assert.ok(bot.placeFleet(), `seed ${seed}`);
+
+    const ships = board.cells.filter((cell) => cell.ship !== null);
+    for (const cell of ships) {
+      const touching = ships.filter(
+        (other) =>
+          other.ship !== cell.ship &&
+          Math.abs(other.position.row - cell.position.row) <= 1 &&
+          Math.abs(other.position.column - cell.position.column) <= 1,
+      );
+      assert.deepEqual(touching, [], `seed ${seed}`);
+    }
+  }
 });
 
 test("the same seed plays the same match", async () => {
