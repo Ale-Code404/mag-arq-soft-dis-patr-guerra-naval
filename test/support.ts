@@ -1,5 +1,5 @@
 import { FinishedMatchRecord } from "../src/application/FinishedMatchRecord";
-import { FinishedMatchRepository } from "../src/application/FinishedMatchRepository";
+import { FinishedMatchRepository, FinishedMatchSummary } from "../src/application/FinishedMatchRepository";
 import { Random } from "../src/domain/shared/Random";
 
 // Mulberry32: a small seeded generator, so every run plays the same match.
@@ -19,5 +19,23 @@ export class InMemoryMatchRepository implements FinishedMatchRepository {
 
   async save(record: FinishedMatchRecord): Promise<void> {
     this.records.push(record);
+  }
+
+  // The id is the position in the list, so a test can also store raw content.
+  stored: unknown[] = [];
+
+  async list(): Promise<FinishedMatchSummary[]> {
+    return this.all()
+      .map((data, index) => ({ id: String(index), data: data as Partial<FinishedMatchRecord> }))
+      .reverse()
+      .map(({ id, data }) => ({ id, finishedAt: data.finishedAt ?? null, winner: data.winner ?? null }));
+  }
+
+  async load(id: string): Promise<unknown> {
+    return this.all()[Number(id)] ?? null;
+  }
+
+  private all(): unknown[] {
+    return [...this.records, ...this.stored];
   }
 }
