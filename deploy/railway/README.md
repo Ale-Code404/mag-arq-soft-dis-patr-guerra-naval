@@ -21,7 +21,36 @@ Lo que hace el compose y Railway no, ya lo resuelve el código:
 - El dominio público usa HTTPS: con `SESSION_COOKIE_SECURE=true`, la cookie de
   sesión solo viaja por HTTPS.
 
-## Pasos
+## Con la CLI (como está desplegado)
+
+`railway up` sube el directorio local, sin pasar por GitHub, y respeta
+`.gitignore` (no sube `.env` ni `node_modules`). Se usa la CLI 5 o posterior;
+`npx @railway/cli@latest` sirve sin instalarla.
+
+```sh
+railway init --name guerra-naval
+railway add --database mysql
+railway add --service api \
+  -v 'DB_HOST=${{MySQL.MYSQLHOST}}' -v 'DB_PORT=${{MySQL.MYSQLPORT}}' \
+  -v 'DB_USER=${{MySQL.MYSQLUSER}}' -v 'DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}' \
+  -v 'DB_NAME=${{MySQL.MYSQLDATABASE}}' -v 'HOST=::' -v 'PORT=3000' \
+  -v 'SESSION_COOKIE_SECURE=true' -v 'RAILWAY_DOCKERFILE_PATH=deploy/api.Dockerfile'
+railway add --service web \
+  -v 'API_UPSTREAM=${{api.RAILWAY_PRIVATE_DOMAIN}}:3000' -v 'PORT=8080' \
+  -v 'RAILWAY_DOCKERFILE_PATH=deploy/web.Dockerfile'
+railway up --service api --ci
+railway up --service web --ci
+railway domain --service web --port 8080
+```
+
+Para publicar cambios basta con repetir los dos `railway up`.
+
+`RAILWAY_DOCKERFILE_PATH` reemplaza al archivo de configuración: así
+desplegado, Railway no lee `api.json` ni `web.json`. Para que use su
+healthcheck y su política de reinicio, indica la ruta del archivo en
+**Settings → Config-as-code** de cada servicio.
+
+## Desde GitHub (panel)
 
 1. Sube la rama a GitHub (Railway construye desde el repositorio).
 2. En Railway: **New Project → Empty project**.
