@@ -62,16 +62,28 @@ export type MatchStatistics = {
   shipsSunk: { player: number; opponent: number };
 };
 
+export type PlayerAccount = { id: string; name: string };
+
 const baseUrl = process.env.API_URL ?? "http://127.0.0.1:3000";
+
+// Node's fetch keeps no cookies, so the session cookie is kept here and sent
+// back like a browser would.
+let sessionCookie: string | undefined;
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; reason: string };
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (sessionCookie) headers.cookie = sessionCookie;
+
   const response = await fetch(`${baseUrl}/api${path}`, {
     method,
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) sessionCookie = setCookie.split(";")[0];
   // 204 has no body.
   const data = response.status === 204 ? null : await response.json();
   if (response.ok) return { ok: true, data: data as T };
@@ -79,6 +91,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
+  // The same name finds the same player and its match.
+  signIn: (name: string) => request<{ player: PlayerAccount }>("POST", "/session", { name }),
   getConfig: () => request<MatchConfig>("GET", "/config"),
   configure: (input: Partial<MatchConfig>) => request<MatchConfig>("PUT", "/config", input),
   startMatch: () => request<MatchView>("POST", "/match"),

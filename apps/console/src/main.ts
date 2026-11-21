@@ -74,6 +74,8 @@ const rejectionText: Record<string, string> = {
   INVALID_MATCH: "la partida guardada no se puede leer o su contenido no es válido",
   NO_REPLAY: "no hay ninguna partida cargada",
   NO_SUCH_TURN: "ese turno no existe",
+  NO_SESSION: "la sesión no es válida; vuelve a entrar con tu nombre",
+  INVALID_NAME: "el nombre debe tener entre 1 y 30 caracteres",
 };
 
 const explain = (reason: string) => rejectionText[reason] ?? reason;
@@ -471,8 +473,23 @@ async function playAutomatically(from: ReplayView): Promise<ReplayView> {
   return replay;
 }
 
+// Who plays: the API keeps one match per player and remembers it by name.
+async function signIn(): Promise<boolean> {
+  while (true) {
+    const name = (await ask("Tu nombre (vacío para salir): ")).trim();
+    if (name === "" || name === "0") return false;
+
+    const result = await api.signIn(name);
+    if (result.ok) {
+      console.log(`Hola, ${result.data.player.name}.`);
+      return true;
+    }
+    console.log(`No se pudo entrar: ${explain(result.reason)}.`);
+  }
+}
+
 try {
-  while (await menu()) {}
+  if (await signIn()) while (await menu()) {}
 } catch (error) {
   console.error("Error al hablar con la API:", (error as Error).message);
 } finally {
