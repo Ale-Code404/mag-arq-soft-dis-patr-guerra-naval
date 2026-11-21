@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import { Game } from "../src/application/Game";
 import { Lobby } from "../src/application/Lobby";
@@ -9,7 +6,6 @@ import { Orientation } from "../src/domain/fleet/Orientation";
 import { MatchPhase } from "../src/domain/match/MatchPhase";
 import { WeaponType } from "../src/domain/weapon/WeaponType";
 import { buildServer } from "../src/infrastructure/http/server";
-import { JsonFilePlayerRepository } from "../src/infrastructure/persistence/JsonFilePlayerRepository";
 import { InMemorySessionRepository } from "../src/infrastructure/session/InMemorySessionRepository";
 import { InMemoryMatchRepository, InMemoryPlayerRepository, seeded } from "./support";
 
@@ -116,21 +112,4 @@ test("each player only sees its own saved matches, which record who played them"
   assert.deepEqual(saved.get(player.id)!.records[0].player, player);
   assert.equal((await app.inject({ method: "GET", url: "/api/matches", headers: { cookie: ana } })).json().length, 1);
   assert.deepEqual((await app.inject({ method: "GET", url: "/api/matches", headers: { cookie: beto } })).json(), []);
-});
-
-test("players are found by code after a restart, and the file keeps no code", async () => {
-  const file = join(await mkdtemp(join(tmpdir(), "players-")), "players.json");
-  const repository = new JsonFilePlayerRepository(file);
-
-  const [ana, beto] = await Promise.all([repository.create("Ana"), repository.create("Beto")]);
-  assert.match(ana.code, /^[0-9a-f]{16}$/);
-  assert.notEqual(ana.code, beto.code);
-
-  const restarted = new JsonFilePlayerRepository(file);
-  assert.deepEqual(await restarted.findByCode(ana.code), ana.player);
-  assert.deepEqual(await restarted.findByCode(beto.code.toUpperCase()), beto.player);
-  assert.equal(await restarted.findByCode("Ana"), null);
-
-  const stored = await readFile(file, "utf8");
-  assert.ok(!stored.includes(ana.code) && !stored.includes(beto.code));
 });

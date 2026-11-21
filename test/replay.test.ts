@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import { FinishedMatchRepository } from "../src/application/FinishedMatchRepository";
 import { Game } from "../src/application/Game";
@@ -9,7 +6,6 @@ import { BoardView, CellState } from "../src/application/MatchView";
 import { Orientation } from "../src/domain/fleet/Orientation";
 import { MatchPhase } from "../src/domain/match/MatchPhase";
 import { WeaponType } from "../src/domain/weapon/WeaponType";
-import { JsonFileMatchRepository } from "../src/infrastructure/persistence/JsonFileMatchRepository";
 import { InMemoryMatchRepository, seeded } from "./support";
 
 const DEFAULT_FLEET_ORIGINS: [row: number, column: number][] = [[0, 0], [2, 0], [4, 0], [6, 0], [6, 4]];
@@ -124,19 +120,4 @@ test("a missing or edited saved match is not loaded (CU-09, 3a)", async () => {
     assert.deepEqual(await game.loadFinishedMatch(id), { ok: false, rejection: "INVALID_MATCH" }, `id ${id}`);
   }
   assert.deepEqual(await game.loadFinishedMatch("99"), { ok: false, rejection: "NOT_FOUND" });
-});
-
-test("the JSON repository lists, loads and rejects unreadable files (RNF-01, CU-09 3a)", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "matches-"));
-  const repository = new JsonFileMatchRepository(directory);
-  const { game } = await playFinishedMatch(repository);
-
-  const [summary] = await game.listFinishedMatches();
-  assert.ok(summary.id.startsWith("match-"));
-  assert.ok((await game.loadFinishedMatch(summary.id)).ok);
-
-  await writeFile(join(directory, "broken.json"), "{ not json", "utf8");
-  assert.equal((await game.listFinishedMatches()).length, 2);
-  assert.deepEqual(await game.loadFinishedMatch("broken"), { ok: false, rejection: "INVALID_MATCH" });
-  assert.deepEqual(await game.loadFinishedMatch("../broken"), { ok: false, rejection: "NOT_FOUND" });
 });

@@ -1,21 +1,24 @@
-import { join } from "node:path";
 import { Game } from "./application/Game";
 import { Lobby } from "./application/Lobby";
+import { connect } from "./infrastructure/database/connect";
+import { migrate } from "./infrastructure/database/migrate";
 import { buildServer } from "./infrastructure/http/server";
-import { JsonFileMatchRepository } from "./infrastructure/persistence/JsonFileMatchRepository";
-import { JsonFilePlayerRepository } from "./infrastructure/persistence/JsonFilePlayerRepository";
+import { MySqlMatchRepository } from "./infrastructure/persistence/MySqlMatchRepository";
+import { MySqlPlayerRepository } from "./infrastructure/persistence/MySqlPlayerRepository";
 import { InMemorySessionRepository } from "./infrastructure/session/InMemorySessionRepository";
 
-// Composition root: many players in one process, one game each. Every player
-// saves its finished matches in a folder of its own, so it only sees those.
-const matchesDir = process.env.MATCHES_DIR ?? "data/matches";
-const players = new JsonFilePlayerRepository(process.env.PLAYERS_FILE ?? "data/players.json");
+// Composition root: many players in one process, one game each. Players and
+// finished matches live in MySQL; each player's game sees only its matches.
+const pool = connect();
+const applied = await migrate(pool);
 
-const lobby = new Lobby(players, new InMemorySessionRepository(), (player) =>
-  new Game({ player, repository: new JsonFileMatchRepository(join(matchesDir, player.id)) }),
+const lobby = new Lobby(new MySqlPlayerRepository(pool), new InMemorySessionRepository(), (player) =>
+  new Game({ player, repository: new MySqlMatchRepository(pool, player.id) }),
 );
 
 const app = buildServer(lobby);
-const port = Number(process.env.PORT ?? 3000);
+app.addHook("onClose", () => pool.end());
+if (applied.length > 0) app.log.info({ applied }, "migrations applied");
 
-await app.listen({ port, host: "127.0.0.1" });
+// In a container the API must listen on every interface; locally, only here.
+await app.listen({ port: Number(process.env.PORT ?? 3000), host: process.env.HOST ?? "127.0.0.1" });

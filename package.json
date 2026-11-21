@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/main.ts",
+    "migrate": "tsx --env-file-if-exists=.env src/infrastructure/database/migrateCli.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --env-file-if-exists=.env --test test/*.test.ts"
   },
   "dependencies": {
-    "fastify": "^5.6.1"
+    "fastify": "^5.6.1",
+    "mysql2": "^3.24.6"
   },
   "devDependencies": {
     "@types/node": "^22.18.12",
