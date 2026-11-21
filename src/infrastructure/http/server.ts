@@ -1,5 +1,5 @@
 import Fastify, { FastifyInstance, FastifyReply } from "fastify";
-import { ActionResult, ConfigureMatchInput, Game } from "../../application/Game";
+import { ActionResult, ConfigureMatchInput, Game, ReplayResult } from "../../application/Game";
 import { Orientation } from "../../domain/fleet/Orientation";
 import { MatchRejection } from "../../domain/match/MatchRejection";
 import { MatchConfig } from "../../domain/match/MatchConfig";
@@ -37,6 +37,13 @@ function send(reply: FastifyReply, result: ActionResult) {
   const status =
     result.rejection === "NO_MATCH" ? 404 : result.rejection === MatchRejection.WRONG_PHASE ? 409 : 422;
   return reply.code(status).send(result);
+}
+
+const REPLAY_STATUS = { MATCH_IN_PROGRESS: 409, NOT_FOUND: 404, NO_REPLAY: 404, INVALID_MATCH: 422, NO_SUCH_TURN: 422 };
+
+function sendReplay(reply: FastifyReply, result: ReplayResult) {
+  if (result.ok) return reply.send(result.replay);
+  return reply.code(REPLAY_STATUS[result.rejection]).send(result);
 }
 
 // Input adapter: translates HTTP requests into calls to the Game facade, and
@@ -95,6 +102,24 @@ export function buildServer(game: Game): FastifyInstance {
   // CU-06, steps 5-6, or cancelling a match.
   app.delete("/api/match", async (_request, reply) =>
     game.closeMatch() ? reply.code(204).send() : reply.code(404).send({ reason: "NO_MATCH" }),
+  );
+
+  // CU-09, step 1.
+  app.get("/api/matches", async () => game.listFinishedMatches());
+
+  // CU-10, steps 1-3, including CU-09 steps 2-4.
+  app.post<{ Body: { id: string } }>("/api/replay", async (request, reply) =>
+    sendReplay(reply, await game.loadFinishedMatch(String(request.body?.id ?? ""))),
+  );
+
+  // CU-10, step 5, 4a1 and 4a2: the state after the first `turn` turns.
+  app.get<{ Params: { turn: string } }>("/api/replay/turns/:turn", async (request, reply) =>
+    sendReplay(reply, game.replayAt(Number(request.params.turn))),
+  );
+
+  // CU-10, steps 6-7.
+  app.delete("/api/replay", async (_request, reply) =>
+    game.closeReplay() ? reply.code(204).send() : reply.code(404).send({ reason: "NO_REPLAY" }),
   );
 
   return app;

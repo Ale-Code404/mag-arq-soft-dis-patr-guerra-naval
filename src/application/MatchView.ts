@@ -5,6 +5,7 @@ import { MatchPhase } from "../domain/match/MatchPhase";
 import { Turn } from "../domain/match/Turn";
 import { Orientation } from "../domain/fleet/Orientation";
 import { Player } from "../domain/player/Player";
+import { ReplayFrame, ReplayTurn } from "../domain/replay/Replay";
 import { OutcomeType } from "../domain/weapon/OutcomeType";
 import { WeaponType } from "../domain/weapon/WeaponType";
 
@@ -97,6 +98,53 @@ export function toTurnViews(match: Match, turns: Turn[]): TurnView[] {
       result: outcome.result,
     })),
   }));
+}
+
+// CU-10, step 3: the match is over, so both fleets are visible.
+export type ReplayView = {
+  id: string;
+  finishedAt: string;
+  winner: Side;
+  // 0 is the initial state; totalTurns is the result (4a1, 4a2).
+  turn: number;
+  totalTurns: number;
+  playerBoard: BoardView;
+  opponentBoard: BoardView;
+  // The turn that led to this state, with its recon outcomes (D-17).
+  lastTurn: TurnView | null;
+};
+
+export function toReplayView(
+  id: string,
+  finishedAt: string,
+  winner: Side,
+  totalTurns: number,
+  frame: ReplayFrame,
+): ReplayView {
+  return {
+    id,
+    finishedAt,
+    winner,
+    turn: frame.turn,
+    totalTurns,
+    playerBoard: toBoardView(frame.boards.PLAYER, true),
+    opponentBoard: toBoardView(frame.boards.OPPONENT, true),
+    lastTurn: frame.last === null ? null : toReplayTurnView(frame.last),
+  };
+}
+
+function toReplayTurnView(turn: ReplayTurn): TurnView {
+  return {
+    number: turn.number,
+    side: turn.side,
+    weapon: turn.weapon,
+    target: { row: turn.target.row, column: turn.target.column },
+    outcomes: turn.outcomes.map((outcome) => ({
+      row: outcome.position.row,
+      column: outcome.position.column,
+      result: outcome.result,
+    })),
+  };
 }
 
 function sideOf(match: Match, player: Player): Side {

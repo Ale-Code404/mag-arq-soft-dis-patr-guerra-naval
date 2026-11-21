@@ -12,10 +12,11 @@ import { Turn } from "../domain/match/Turn";
 import { Clock } from "../domain/shared/Clock";
 import { Coordinate } from "../domain/shared/Coordinate";
 import { Random } from "../domain/shared/Random";
+import { Replay } from "../domain/replay/Replay";
 import { WeaponType } from "../domain/weapon/WeaponType";
-import { toFinishedMatchRecord } from "./FinishedMatchRecord";
-import { FinishedMatchRepository } from "./FinishedMatchRepository";
-import { MatchView, toMatchView, toTurnViews, TurnView } from "./MatchView";
+import { FinishedMatchRecord, toFinishedMatchRecord, toReplay } from "./FinishedMatchRecord";
+import { FinishedMatchRepository, FinishedMatchSummary } from "./FinishedMatchRepository";
+import { MatchView, ReplayView, toMatchView, toReplayView, toTurnViews, TurnView } from "./MatchView";
 
 export type ConfigureMatchInput = {
   boardSize?: number;
@@ -36,6 +37,13 @@ export type ActionResult =
   | { ok: true; match: MatchView; turns: TurnView[]; saved?: boolean }
   | { ok: false; rejection: GameRejection };
 
+// CU-09: 3a covers both an unreadable file and invalid content.
+export type ReplayRejection = "MATCH_IN_PROGRESS" | "NOT_FOUND" | "INVALID_MATCH" | "NO_REPLAY" | "NO_SUCH_TURN";
+
+export type ReplayResult = { ok: true; replay: ReplayView } | { ok: false; rejection: ReplayRejection };
+
+type LoadedMatch = { id: string; record: FinishedMatchRecord; replay: Replay };
+
 export type GameOptions = {
   config?: MatchConfig;
   random?: Random;
@@ -48,6 +56,7 @@ export type GameOptions = {
 export class Game {
   private config: MatchConfig;
   private match: Match | null = null;
+  private loaded: LoadedMatch | null = null;
   private readonly random: Random;
   private readonly clock: Clock;
   private readonly repository: FinishedMatchRepository | null;
@@ -140,6 +149,56 @@ export class Game {
     if (this.match === null) return false;
 
     this.match = null;
+    return true;
+  }
+
+  // CU-09, step 1 (1a: an empty list, which the presentation reports).
+  async listFinishedMatches(): Promise<FinishedMatchSummary[]> {
+    return this.repository === null ? [] : this.repository.list();
+  }
+
+  // CU-09, steps 2-4, as included by CU-10 (steps 2-3): the chosen match is
+  // read, validated and left ready at its initial state. A rejected one does
+  // not replace the match already loaded.
+  async loadFinishedMatch(id: string): Promise<ReplayResult> {
+    if (this.isMatchInProgress()) return { ok: false, rejection: "MATCH_IN_PROGRESS" };
+    if (this.repository === null) return { ok: false, rejection: "NOT_FOUND" };
+
+    let data: unknown;
+    try {
+      data = await this.repository.load(id);
+    } catch {
+      return { ok: false, rejection: "INVALID_MATCH" };
+    }
+    if (data === null) return { ok: false, rejection: "NOT_FOUND" };
+
+    const replay = toReplay(data);
+    if (replay === null) return { ok: false, rejection: "INVALID_MATCH" };
+
+    this.loaded = { id, record: data as FinishedMatchRecord, replay };
+    return this.replayAt(0);
+  }
+
+  // CU-10, steps 3 and 5, 4a1 and 4a2: the state after the first `turn` turns.
+  replayAt(turn: number): ReplayResult {
+    const loaded = this.loaded;
+    if (loaded === null) return { ok: false, rejection: "NO_REPLAY" };
+
+    const frame = loaded.replay.at(turn);
+    if (frame === null) return { ok: false, rejection: "NO_SUCH_TURN" };
+
+    const { record, replay } = loaded;
+    return {
+      ok: true,
+      replay: toReplayView(loaded.id, record.finishedAt, replay.winner, replay.turns.length, frame),
+    };
+  }
+
+  // CU-10, steps 6-7: the saved match is left as it was.
+  closeReplay(): boolean {
+    if (this.loaded === null) return false;
+
+    this.loaded = null;
     return true;
   }
 
