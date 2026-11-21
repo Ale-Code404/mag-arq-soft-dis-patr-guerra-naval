@@ -10,6 +10,7 @@ import {
   type MatchStatistics,
   type MatchView,
   type Orientation,
+  type PlayerAccount,
   type OutcomeType,
   type Position,
   type Rejection,
@@ -25,6 +26,11 @@ import { turnEffect, type CellEffect } from "./effects";
 
 // D-17: recon results stay visible for 10 seconds; the timer lives here.
 const RECON_VISIBLE_MS = 10_000;
+
+// Who plays; null until the player signs in with a name.
+const player = ref<PlayerAccount | null>(null);
+const playerName = ref("");
+const ready = ref(false);
 
 const config = ref<MatchConfig | null>(null);
 const match = ref<MatchView | null>(null);
@@ -90,6 +96,8 @@ const rejectionText: Record<Rejection, string> = {
   INVALID_MATCH: "La partida guardada no se puede leer o su contenido no es válido.",
   NO_REPLAY: "No hay ninguna partida cargada.",
   NO_SUCH_TURN: "Ese turno no existe.",
+  NO_SESSION: "Tu sesión terminó; vuelve a entrar con tu nombre.",
+  INVALID_NAME: "El nombre debe tener entre 1 y 30 caracteres.",
 };
 
 const weaponName: Record<WeaponType, string> = {
@@ -253,6 +261,7 @@ async function run(action: () => Promise<void>) {
     await action();
   } catch (error) {
     show(error);
+    if (error instanceof ApiError && error.reason === "NO_SESSION") leave();
     // A rejection may have discarded the match (CU-01, 5a).
     if (error instanceof ApiError && error.reason === "OPPONENT_PLACEMENT_FAILED") match.value = null;
   }
@@ -353,11 +362,45 @@ const closeMatch = () =>
     fillForm(await api.getConfig());
   });
 
-onMounted(async () => {
-  window.addEventListener("keydown", onKeydown);
+// The player's configuration and match, as the server kept them.
+async function enter(account: PlayerAccount) {
+  player.value = account;
   fillForm(await api.getConfig());
   match.value = await api.getMatch();
   if (match.value?.phase === "PLACEMENT") selectedShip.value = firstPendingShip(match.value);
+}
+
+// Forgets everything of the previous player on this page.
+function leave() {
+  stopAnimations();
+  clearTimeout(reconTimer);
+  recon.value = new Map();
+  player.value = null;
+  match.value = null;
+  turns.value = [];
+  saved.value = null;
+  statistics.value = null;
+  replaying.value = false;
+}
+
+const signIn = () =>
+  run(async () => {
+    const { player: account } = await api.signIn(playerName.value);
+    await enter(account);
+  });
+
+// The match stays on the server; signing in again with the name finds it.
+const signOut = () =>
+  run(async () => {
+    await api.signOut();
+    leave();
+  });
+
+onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
+  const session = await api.getSession();
+  if (session) await enter(session.player);
+  ready.value = true;
 });
 
 onUnmounted(() => {
@@ -371,180 +414,202 @@ onUnmounted(() => {
   <main>
     <h1>Guerra naval</h1>
 
-    <section v-if="!match && !replaying" class="panel">
-      <h2>Configurar partida</h2>
-      <form @submit.prevent="saveConfig">
+    <section v-if="ready && !player" class="panel">
+      <h2>¿Quién juega?</h2>
+      <form @submit.prevent="signIn">
         <label>
-          Tamaño del tablero
-          <input v-model.number="form.boardSize" type="number" min="1" />
-        </label>
-        <label>
-          Dificultad
-          <select v-model="form.difficulty">
-            <option value="EASY">Fácil</option>
-            <option value="NORMAL">Normal</option>
-            <option value="HARD">Difícil</option>
-          </select>
-        </label>
-        <label>
-          Primer turno
-          <select v-model="form.firstTurn">
-            <option value="HUMAN">Jugador</option>
-            <option value="BOT">Oponente</option>
-            <option value="RANDOM">Al azar</option>
-          </select>
-        </label>
-        <label class="check">
-          <input v-model="form.extraTurnOnHit" type="checkbox" />
-          Un acierto concede otro turno
+          Tu nombre
+          <input v-model="playerName" type="text" maxlength="30" autocomplete="nickname" required />
         </label>
         <div class="actions">
-          <button type="submit">Guardar configuración</button>
-          <button type="button" class="primary" @click="startMatch">Iniciar partida</button>
+          <button type="submit" class="primary">Entrar</button>
         </div>
       </form>
-      <p v-if="config" class="hint">
-        Flota: {{ config.shipLengths.join(", ") }} casillas.
-      </p>
+      <p class="hint">Con el mismo nombre vuelves a tu partida y a tus partidas guardadas.</p>
+      <p v-if="message" class="message" role="status">{{ message }}</p>
     </section>
 
-    <!-- CU-10, including CU-09: only without a match in progress. -->
-    <ReplayPanel v-if="!match || match.phase === 'FINISHED'" :describe-turn="describeTurn" @active="(on) => (replaying = on)" />
-
-    <p v-if="message" class="message" role="status">{{ message }}</p>
-
-    <template v-if="match && !replaying">
-      <!-- CU-03: placement of the Jugador's fleet. -->
-      <section v-if="match.phase === 'PLACEMENT'" class="panel">
-        <h2>Ubica tu flota</h2>
-        <p class="hint">
-          Elige un barco, su orientación y pulsa la casilla de tu tablero donde empieza
-          (extremo izquierdo o superior). Al pasar el puntero verás dónde quedaría; en rojo, si no
-          cabe o queda pegado a otro barco (deja una casilla libre, también en diagonal). Pulsa «R» para girarlo.
-        </p>
-        <ul class="ships">
-          <li v-for="(ship, index) in match.fleet" :key="index">
-            <button
-              type="button"
-              :class="{ active: selectedShip === index }"
-              @click="selectShip(index)"
-            >
-              Barco {{ index + 1 }} ({{ ship.length }})
-              <span class="tag" :class="{ done: ship.placed }">
-                {{ ship.placed ? `en ${cellLabel(ship.origin!)} ${ship.orientation === "VERTICAL" ? "↓" : "→"}` : "sin ubicar" }}
-              </span>
-            </button>
-          </li>
-        </ul>
-        <div class="actions">
-          <button type="button" @click="toggleOrientation">
-            Orientación: {{ orientation === "HORIZONTAL" ? "horizontal →" : "vertical ↓" }}
-          </button>
-          <button
-            type="button"
-            :disabled="selectedShip === null || !match.fleet[selectedShip]?.placed"
-            @click="removeSelected"
-          >
-            Retirar barco
-          </button>
-          <button type="button" class="primary" :disabled="!allPlaced" @click="confirmFleet">
-            Confirmar flota
-          </button>
-          <button type="button" class="ghost" @click="closeMatch">Abandonar partida</button>
-        </div>
-      </section>
-
-      <!-- CU-04: the Jugador's turn. -->
-      <section v-else-if="match.phase === 'IN_PROGRESS'" class="panel">
-        <h2>Batalla</h2>
-        <p class="hint">
-          Elige un arma y pulsa una casilla del tablero rival (esquina superior izquierda del área).
-          Al pasar el puntero verás el área que cubre; en rojo, si ese ataque no es válido.
-          Barcos rivales a flote: <strong>{{ match.rivalShipsAfloat }}</strong>.
-        </p>
-        <div class="weapons">
-          <label v-for="weapon in match.arsenal" :key="weapon.type" class="weapon" :class="{ empty: weapon.ammo === 0 }">
-            <input
-              v-model="selectedWeapon"
-              type="radio"
-              name="weapon"
-              :value="weapon.type"
-              :disabled="weapon.ammo === 0"
-            />
-            <span>
-              {{ weaponName[weapon.type] }} · {{ weapon.ammo ?? "∞" }}
-              <small>{{ weaponArea[weapon.type] }}</small>
-            </span>
-          </label>
-        </div>
-        <div class="actions">
-          <button type="button" class="ghost" @click="closeMatch">Abandonar partida</button>
-        </div>
-      </section>
-
-      <!-- CU-06: end of the match. -->
-      <section v-else class="panel result" :class="match.winner === 'PLAYER' ? 'won' : 'lost'">
-        <h2>{{ match.winner === "PLAYER" ? "¡Ganaste!" : "Ganó el oponente" }}</h2>
-        <p class="hint">
-          Turnos jugados: {{ match.turnsPlayed }}.
-          <template v-if="saved !== null">
-            {{ saved ? "La partida se guardó." : "La partida no se pudo guardar." }}
-          </template>
-        </p>
-        <!-- CU-07, step 4; closing it shows the result again (steps 5-6). -->
-        <dl v-if="statistics" class="statistics">
-          <dt>Precisión</dt>
-          <dd>{{ precisionText(statistics) }}</dd>
-          <dt>Turnos consumidos</dt>
-          <dd>{{ statistics.turns.total }} (tuyos {{ statistics.turns.player }}, del oponente {{ statistics.turns.opponent }})</dd>
-          <dt>Barcos destruidos</dt>
-          <dd>del oponente {{ statistics.shipsSunk.opponent }}, tuyos {{ statistics.shipsSunk.player }}</dd>
-        </dl>
-        <div class="actions">
-          <button v-if="!statistics" type="button" @click="showStatistics">Ver estadísticas</button>
-          <button v-else type="button" @click="statistics = null">Cerrar estadísticas</button>
-          <button type="button" class="primary" @click="closeMatch">Cerrar partida</button>
-        </div>
-      </section>
-
-      <div class="boards">
-        <BoardGrid
-          title="Tu tablero"
-          :board="match.ownBoard"
-          :clickable="match.phase === 'PLACEMENT'"
-          :highlight="selectedCells"
-          :effects="ownEffects"
-          :preview="placementPreview.cells"
-          :preview-invalid="!placementPreview.valid"
-          @cell-click="placeAt"
-          @cell-hover="(row, column) => (anchored = { row, column })"
-          @hover-end="anchored = null"
-        />
-        <BoardGrid
-          title="Tablero rival"
-          :board="match.rivalBoard"
-          :clickable="aiming"
-          :overlay="recon"
-          :effects="rivalEffects"
-          :preview="preview.cells"
-          :preview-invalid="!preview.valid"
-          @cell-hover="(row, column) => (aimed = { row, column })"
-          @hover-end="aimed = null"
-          @cell-click="fireAt"
-        />
-      </div>
-      <p v-if="recon.size > 0" class="hint">
-        Reconocimiento: «?» marca casillas con barco; se ocultan a los 10 segundos.
+    <template v-if="player">
+      <p class="hint session">
+        Jugador: <strong>{{ player.name }}</strong>
+        <button type="button" class="ghost" @click="signOut">Cambiar de jugador</button>
       </p>
 
-      <section v-if="lastTurns.length > 0" class="panel">
-        <h2>Últimos turnos</h2>
-        <ol class="log">
-          <li v-for="turn in lastTurns" :key="turn.number" :class="turn.side.toLowerCase()">
-            <span class="turn">{{ turn.number }}.</span> {{ describeTurn(turn) }}
-          </li>
-        </ol>
+      <section v-if="!match && !replaying" class="panel">
+        <h2>Configurar partida</h2>
+        <form @submit.prevent="saveConfig">
+          <label>
+            Tamaño del tablero
+            <input v-model.number="form.boardSize" type="number" min="1" />
+          </label>
+          <label>
+            Dificultad
+            <select v-model="form.difficulty">
+              <option value="EASY">Fácil</option>
+              <option value="NORMAL">Normal</option>
+              <option value="HARD">Difícil</option>
+            </select>
+          </label>
+          <label>
+            Primer turno
+            <select v-model="form.firstTurn">
+              <option value="HUMAN">Jugador</option>
+              <option value="BOT">Oponente</option>
+              <option value="RANDOM">Al azar</option>
+            </select>
+          </label>
+          <label class="check">
+            <input v-model="form.extraTurnOnHit" type="checkbox" />
+            Un acierto concede otro turno
+          </label>
+          <div class="actions">
+            <button type="submit">Guardar configuración</button>
+            <button type="button" class="primary" @click="startMatch">Iniciar partida</button>
+          </div>
+        </form>
+        <p v-if="config" class="hint">
+          Flota: {{ config.shipLengths.join(", ") }} casillas.
+        </p>
       </section>
+
+      <!-- CU-10, including CU-09: only without a match in progress. -->
+      <ReplayPanel v-if="!match || match.phase === 'FINISHED'" :describe-turn="describeTurn" @active="(on) => (replaying = on)" />
+
+      <p v-if="message" class="message" role="status">{{ message }}</p>
+
+      <template v-if="match && !replaying">
+        <!-- CU-03: placement of the Jugador's fleet. -->
+        <section v-if="match.phase === 'PLACEMENT'" class="panel">
+          <h2>Ubica tu flota</h2>
+          <p class="hint">
+            Elige un barco, su orientación y pulsa la casilla de tu tablero donde empieza
+            (extremo izquierdo o superior). Al pasar el puntero verás dónde quedaría; en rojo, si no
+            cabe o queda pegado a otro barco (deja una casilla libre, también en diagonal). Pulsa «R» para girarlo.
+          </p>
+          <ul class="ships">
+            <li v-for="(ship, index) in match.fleet" :key="index">
+              <button
+                type="button"
+                :class="{ active: selectedShip === index }"
+                @click="selectShip(index)"
+              >
+                Barco {{ index + 1 }} ({{ ship.length }})
+                <span class="tag" :class="{ done: ship.placed }">
+                  {{ ship.placed ? `en ${cellLabel(ship.origin!)} ${ship.orientation === "VERTICAL" ? "↓" : "→"}` : "sin ubicar" }}
+                </span>
+              </button>
+            </li>
+          </ul>
+          <div class="actions">
+            <button type="button" @click="toggleOrientation">
+              Orientación: {{ orientation === "HORIZONTAL" ? "horizontal →" : "vertical ↓" }}
+            </button>
+            <button
+              type="button"
+              :disabled="selectedShip === null || !match.fleet[selectedShip]?.placed"
+              @click="removeSelected"
+            >
+              Retirar barco
+            </button>
+            <button type="button" class="primary" :disabled="!allPlaced" @click="confirmFleet">
+              Confirmar flota
+            </button>
+            <button type="button" class="ghost" @click="closeMatch">Abandonar partida</button>
+          </div>
+        </section>
+
+        <!-- CU-04: the Jugador's turn. -->
+        <section v-else-if="match.phase === 'IN_PROGRESS'" class="panel">
+          <h2>Batalla</h2>
+          <p class="hint">
+            Elige un arma y pulsa una casilla del tablero rival (esquina superior izquierda del área).
+            Al pasar el puntero verás el área que cubre; en rojo, si ese ataque no es válido.
+            Barcos rivales a flote: <strong>{{ match.rivalShipsAfloat }}</strong>.
+          </p>
+          <div class="weapons">
+            <label v-for="weapon in match.arsenal" :key="weapon.type" class="weapon" :class="{ empty: weapon.ammo === 0 }">
+              <input
+                v-model="selectedWeapon"
+                type="radio"
+                name="weapon"
+                :value="weapon.type"
+                :disabled="weapon.ammo === 0"
+              />
+              <span>
+                {{ weaponName[weapon.type] }} · {{ weapon.ammo ?? "∞" }}
+                <small>{{ weaponArea[weapon.type] }}</small>
+              </span>
+            </label>
+          </div>
+          <div class="actions">
+            <button type="button" class="ghost" @click="closeMatch">Abandonar partida</button>
+          </div>
+        </section>
+
+        <!-- CU-06: end of the match. -->
+        <section v-else class="panel result" :class="match.winner === 'PLAYER' ? 'won' : 'lost'">
+          <h2>{{ match.winner === "PLAYER" ? "¡Ganaste!" : "Ganó el oponente" }}</h2>
+          <p class="hint">
+            Turnos jugados: {{ match.turnsPlayed }}.
+            <template v-if="saved !== null">
+              {{ saved ? "La partida se guardó." : "La partida no se pudo guardar." }}
+            </template>
+          </p>
+          <!-- CU-07, step 4; closing it shows the result again (steps 5-6). -->
+          <dl v-if="statistics" class="statistics">
+            <dt>Precisión</dt>
+            <dd>{{ precisionText(statistics) }}</dd>
+            <dt>Turnos consumidos</dt>
+            <dd>{{ statistics.turns.total }} (tuyos {{ statistics.turns.player }}, del oponente {{ statistics.turns.opponent }})</dd>
+            <dt>Barcos destruidos</dt>
+            <dd>del oponente {{ statistics.shipsSunk.opponent }}, tuyos {{ statistics.shipsSunk.player }}</dd>
+          </dl>
+          <div class="actions">
+            <button v-if="!statistics" type="button" @click="showStatistics">Ver estadísticas</button>
+            <button v-else type="button" @click="statistics = null">Cerrar estadísticas</button>
+            <button type="button" class="primary" @click="closeMatch">Cerrar partida</button>
+          </div>
+        </section>
+
+        <div class="boards">
+          <BoardGrid
+            title="Tu tablero"
+            :board="match.ownBoard"
+            :clickable="match.phase === 'PLACEMENT'"
+            :highlight="selectedCells"
+            :effects="ownEffects"
+            :preview="placementPreview.cells"
+            :preview-invalid="!placementPreview.valid"
+            @cell-click="placeAt"
+            @cell-hover="(row, column) => (anchored = { row, column })"
+            @hover-end="anchored = null"
+          />
+          <BoardGrid
+            title="Tablero rival"
+            :board="match.rivalBoard"
+            :clickable="aiming"
+            :overlay="recon"
+            :effects="rivalEffects"
+            :preview="preview.cells"
+            :preview-invalid="!preview.valid"
+            @cell-hover="(row, column) => (aimed = { row, column })"
+            @hover-end="aimed = null"
+            @cell-click="fireAt"
+          />
+        </div>
+        <p v-if="recon.size > 0" class="hint">
+          Reconocimiento: «?» marca casillas con barco; se ocultan a los 10 segundos.
+        </p>
+
+        <section v-if="lastTurns.length > 0" class="panel">
+          <h2>Últimos turnos</h2>
+          <ol class="log">
+            <li v-for="turn in lastTurns" :key="turn.number" :class="turn.side.toLowerCase()">
+              <span class="turn">{{ turn.number }}.</span> {{ describeTurn(turn) }}
+            </li>
+          </ol>
+        </section>
+      </template>
     </template>
   </main>
 </template>

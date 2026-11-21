@@ -590,3 +590,10 @@ button.active {
 .statistics dd {
   margin: 0;
 }
+
+/* The player in session, above the game. */
+.session {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}

@@ -82,6 +82,8 @@ export type MatchStatistics = {
   shipsSunk: { player: number; opponent: number };
 };
 
+export type PlayerAccount = { id: string; name: string };
+
 export type Rejection =
   | "MATCH_IN_PROGRESS"
   | "INVALID_VALUE"
@@ -107,7 +109,9 @@ export type Rejection =
   | "NOT_FOUND"
   | "INVALID_MATCH"
   | "NO_REPLAY"
-  | "NO_SUCH_TURN";
+  | "NO_SUCH_TURN"
+  | "NO_SESSION"
+  | "INVALID_NAME";
 
 export class ApiError extends Error {
   constructor(
@@ -133,6 +137,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
+  // The session lives in an HttpOnly cookie the browser sends by itself.
+  getSession: () =>
+    request<{ player: PlayerAccount }>("GET", "/session").catch((error) => {
+      if (error instanceof ApiError && error.status === 401) return null;
+      throw error;
+    }),
+  // The same name finds the same player and its match.
+  signIn: (name: string) => request<{ player: PlayerAccount }>("POST", "/session", { name }),
+  signOut: () => request<null>("DELETE", "/session").catch(() => null),
   getConfig: () => request<MatchConfig>("GET", "/config"),
   configure: (input: ConfigureMatchInput) => request<MatchConfig>("PUT", "/config", input),
   startMatch: () => request<MatchView>("POST", "/match"),
