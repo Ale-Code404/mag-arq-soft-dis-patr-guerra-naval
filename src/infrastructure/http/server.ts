@@ -67,16 +67,22 @@ function sessionToken(request: FastifyRequest): string | undefined {
 
 // HttpOnly keeps the token away from page scripts; Lax keeps other sites from
 // using it to play on the player's behalf.
-function sessionCookie(token: string, maxAge?: number): string {
+// Secure (behind HTTPS) keeps it off plain HTTP.
+function sessionCookie(token: string, secure: boolean, maxAge?: number): string {
   const expiry = maxAge === undefined ? "" : `; Max-Age=${maxAge}`;
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${expiry}`;
+  const https = secure ? "; Secure" : "";
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${https}${expiry}`;
 }
 
 // Input adapter: translates HTTP requests into calls to the Game facade of the
 // player in session, and its results into status codes. No game rule lives here.
-export function buildServer(lobby: Lobby, { logger = true } = {}): FastifyInstance {
+export function buildServer(lobby: Lobby, { logger = true, secureCookie = false } = {}): FastifyInstance {
   const app = Fastify({ logger });
   app.decorateRequest("game", null as unknown as Game);
+  const cookie = (token: string, maxAge?: number) => sessionCookie(token, secureCookie, maxAge);
+
+  // For the platform's health check: the API is up and answering.
+  app.get("/api/health", async () => ({ status: "ok" }));
 
   // A new player: its code is in this answer only, and a session is opened.
   app.post<{ Body: { name: string } }>("/api/players", async (request, reply) => {
@@ -84,7 +90,7 @@ export function buildServer(lobby: Lobby, { logger = true } = {}): FastifyInstan
     if (!result.ok) return reply.code(422).send(result);
 
     const { player, code } = result;
-    return reply.header("set-cookie", sessionCookie(result.token)).code(201).send({ player, code });
+    return reply.header("set-cookie", cookie(result.token)).code(201).send({ player, code });
   });
 
   // Signing in again, here or in another browser, with the player's code.
@@ -92,7 +98,7 @@ export function buildServer(lobby: Lobby, { logger = true } = {}): FastifyInstan
     const result = await lobby.signIn(request.body?.code);
     if (!result.ok) return reply.code(401).send(result);
 
-    return reply.header("set-cookie", sessionCookie(result.token)).code(201).send({ player: result.player });
+    return reply.header("set-cookie", cookie(result.token)).code(201).send({ player: result.player });
   });
 
   app.get("/api/session", async (request, reply) => {
@@ -103,7 +109,7 @@ export function buildServer(lobby: Lobby, { logger = true } = {}): FastifyInstan
 
   app.delete("/api/session", async (request, reply) => {
     const closed = await lobby.signOut(sessionToken(request));
-    return reply.header("set-cookie", sessionCookie("", 0)).code(closed ? 204 : 401).send();
+    return reply.header("set-cookie", cookie("", 0)).code(closed ? 204 : 401).send();
   });
 
   // Every other route plays on the Game of the player in session.

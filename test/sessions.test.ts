@@ -113,3 +113,15 @@ test("each player only sees its own saved matches, which record who played them"
   assert.equal((await app.inject({ method: "GET", url: "/api/matches", headers: { cookie: ana } })).json().length, 1);
   assert.deepEqual((await app.inject({ method: "GET", url: "/api/matches", headers: { cookie: beto } })).json(), []);
 });
+
+test("the health check needs no session, and the cookie can be HTTPS only", async () => {
+  const { app } = newServer();
+  const health = await app.inject({ method: "GET", url: "/api/health" });
+  assert.deepEqual([health.statusCode, health.json()], [200, { status: "ok" }]);
+
+  const lobby = new Lobby(new InMemoryPlayerRepository(), new InMemorySessionRepository(), (player) => new Game({ player }));
+  const secure = buildServer(lobby, { logger: false, secureCookie: true });
+  const response = await secure.inject({ method: "POST", url: "/api/players", payload: { name: "Ana" } });
+  assert.match(String(response.headers["set-cookie"]), /; Secure/);
+  assert.doesNotMatch(String((await register(app, "Beto")).cookie), /Secure/);
+});

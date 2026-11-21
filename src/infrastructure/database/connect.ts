@@ -1,5 +1,7 @@
 import { createPool, Pool } from "mysql2/promise";
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Connection settings come from the environment (.env in development, the
 // compose file when deployed), never from the code.
 export function connect(env: NodeJS.ProcessEnv = process.env): Pool {
@@ -13,4 +15,18 @@ export function connect(env: NodeJS.ProcessEnv = process.env): Pool {
     // Dates are stored and read in UTC, as the records write them.
     timezone: "Z",
   });
+}
+
+// Where nothing orders the start (Railway has no depends_on), the database may
+// come up after the API: keep trying before giving up.
+export async function waitForDatabase(pool: Pool, attempts = 30, delayMs = 2_000): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query("SELECT 1");
+      return;
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await sleep(delayMs);
+    }
+  }
 }
