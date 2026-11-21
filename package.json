@@ -7,16 +7,25 @@
     "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
     "start": "tsx --env-file-if-exists=.env src/main.ts",
     "migrate": "tsx --env-file-if-exists=.env src/infrastructure/database/migrateCli.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p test",
-    "test": "tsx --env-file-if-exists=.env --test test/*.test.ts"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test && tsc --noEmit -p .railway",
+    "test": "tsx --env-file-if-exists=.env --test test/*.test.ts",
+    "iac:plan": "railway config plan",
+    "iac:apply": "railway config apply",
+    "deploy:api": "railway up --service api --ci",
+    "deploy:web": "railway up --service web --ci"
   },
   "dependencies": {
     "fastify": "^5.6.1",
-    "mysql2": "^3.24.6"
+    "mysql2": "^3.24.6",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
+    "@railway/cli": "5.75.0",
     "@types/node": "^22.18.12",
-    "tsx": "^4.20.6",
+    "railway": "3.17.0",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "@railway/cli@5.75.0": true
   }
 }

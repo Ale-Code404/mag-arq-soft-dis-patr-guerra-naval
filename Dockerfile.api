@@ -1,0 +1,21 @@
+# The API. Stages: deps (production packages only) and prod, the image that
+# runs. prod is also the last stage, so a build without --target gets it too.
+#   docker build -f Dockerfile.api --target prod .
+FROM node:24.21.0-alpine AS base
+WORKDIR /app
+
+# Production packages only: fastify, mysql2 and tsx, which runs the
+# TypeScript (the project emits no JavaScript). No typescript, no @types.
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+FROM base AS prod
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json tsconfig.json ./
+COPY src ./src
+USER node
+EXPOSE 3000
+# Waits for MySQL and applies the migrations before listening (src/main.ts).
+CMD ["node_modules/.bin/tsx", "src/main.ts"]

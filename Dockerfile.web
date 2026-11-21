@@ -1,0 +1,22 @@
+# The web view. Stages: build (Vite) and prod (nginx serving the build and
+# forwarding /api to the API). prod is also the last stage, so a build
+# without --target gets it too.
+#   docker build -f Dockerfile.web --target prod .
+FROM node:24.21.0-alpine AS build
+WORKDIR /web
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+COPY apps/web ./
+RUN npm run build
+
+FROM nginx:1.27-alpine AS prod
+# Defaults for compose; Railway sets PORT and API_UPSTREAM on the service.
+ENV PORT=80 API_UPSTREAM=api:3000
+# NGINX_LOCAL_RESOLVERS is filled by the image from /etc/resolv.conf.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+# The image turns templates/*.template into conf.d/*.conf with envsubst; only
+# these names are replaced, so nginx's own $host and $uri stay.
+ENV NGINX_ENVSUBST_FILTER="^(PORT|API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$"
+COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /web/dist /usr/share/nginx/html
+EXPOSE 80

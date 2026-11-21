@@ -1,6 +1,3 @@
-# Local only: MySQL, the API and the web, as they run on Railway
-# (deploy/railway). Passwords come from .env (copy .env.example).
-# Play at http://localhost:8080; MySQL is on 127.0.0.1:3307.
 name: guerra-naval
 
 services:
@@ -14,27 +11,27 @@ services:
     ports:
       - "127.0.0.1:3307:3306"
     volumes:
-      - db-data:/var/lib/mysql
+      - mysql:/var/lib/mysql
 
-  # Waits for db by itself (waitForDatabase), as on Railway.
   api:
     build:
       context: .
-      dockerfile: deploy/api.Dockerfile
+      dockerfile: Dockerfile.api
+      target: prod
     environment:
       DB_HOST: db
       DB_PORT: 3306
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      HOST: "::"
 
   web:
     build:
       context: .
-      dockerfile: deploy/web.Dockerfile
+      dockerfile: Dockerfile.web
+      target: prod
     ports:
       - "8080:80"
 
 volumes:
-  db-data:
+  mysql:

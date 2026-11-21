@@ -11,7 +11,9 @@ Juego de guerra naval por turnos, proyecto de Diseño Basado en Patrones.
 | `src/infrastructure/http` | Infraestructura | API HTTP sobre `Game`; sesiones por cookie |
 | `src/infrastructure/persistence` | Infraestructura | Jugadores y partidas terminadas en MySQL |
 | `src/infrastructure/database` | Infraestructura | Conexión y migraciones (`migrations/*.sql`) |
-| `deploy`, `compose.yaml` | Despliegue | Imágenes de la API y la web; MySQL, API y web con Docker Compose |
+| `Dockerfile.api`, `Dockerfile.web` | Despliegue | Imágenes multistage; el target `prod` es el que se despliega |
+| `compose.yaml` | Despliegue | MySQL, API y web en local, con los targets `prod` |
+| `.railway/railway.ts` | Despliegue | Proyecto de Railway como código (IaC): `npm run iac:plan`, `npm run iac:apply` |
 | `apps/web` | Presentación | Cliente Vue; solo habla con la API |
 | `apps/console` | Presentación | Cliente de consola; solo habla con la API |
 
@@ -26,6 +28,11 @@ docker compose up -d --build      # MySQL, API y web
 
 Se juega en http://localhost:8080. La API aplica las migraciones pendientes al
 arrancar. MySQL queda publicado solo en esta máquina, en el puerto 3307.
+
+En Railway, `.railway/railway.ts` declara MySQL, la API y la web. `npm run
+iac:plan` muestra los cambios sin aplicarlos, y `npm run iac:apply` los
+aplica; un recurso que falte en el archivo se elimina. El código se publica
+con `npx @railway/cli up --service api` y `--service web`.
 
 ## Desarrollo
 

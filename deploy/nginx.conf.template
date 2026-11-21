@@ -3,12 +3,19 @@
 # image fills ${PORT} and ${API_UPSTREAM} from the environment on start:
 # api:3000 in compose, api.railway.internal:3000 on Railway.
 server {
+  # The API's address changes with every deploy. A fixed proxy_pass host is
+  # resolved once, at start, and then points at a container that is gone; with
+  # the container's own DNS (resolv.conf) and a variable, it is looked up again.
+  resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+
   listen ${PORT};
   listen [::]:${PORT};
   root /usr/share/nginx/html;
 
   location /api/ {
-    proxy_pass http://${API_UPSTREAM};
+    # Without a URI part, proxy_pass sends the request URI as it came.
+    set $api_upstream ${API_UPSTREAM};
+    proxy_pass http://$api_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
