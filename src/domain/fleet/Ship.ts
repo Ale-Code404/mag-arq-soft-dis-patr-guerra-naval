@@ -1,7 +1,8 @@
 import { Coordinate } from "../shared/Coordinate";
+import { Prototype } from "../shared/Prototype";
 import { Orientation } from "./Orientation";
 
-export class Ship {
+export class Ship implements Prototype<Ship> {
   // Free cells kept around every ship, diagonals included, so no two ships
   // touch (CU-03, 3c).
   static readonly DEFAULT_MARGIN = 1;
@@ -65,5 +66,15 @@ export class Ship {
 
   isSunk(): boolean {
     return this.hits >= this.length;
+  }
+
+  // CU-10: a copy with the same position and hits, so hitting it leaves the
+  // original as it was.
+  clone(): Ship {
+    const copy = new Ship(this.length);
+    copy.origin = this.origin;
+    copy.orientation = this.orientation;
+    copy.hits = this.hits;
+    return copy;
   }
 }

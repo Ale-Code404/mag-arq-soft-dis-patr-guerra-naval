@@ -1,10 +1,11 @@
 import { Ship } from "../fleet/Ship";
 import { Orientation } from "../fleet/Orientation";
 import { Coordinate } from "../shared/Coordinate";
+import { Prototype } from "../shared/Prototype";
 import { Cell } from "./Cell";
 import { PlacementRejection } from "./PlacementRejection";
 
-export class Board {
+export class Board implements Prototype<Board> {
   size: number;
   cells: Cell[];
 
@@ -87,6 +88,27 @@ export class Board {
     ship.placeAt(origin, orientation);
 
     return null;
+  }
+
+  // Prototype (CU-10): a deep copy. Each ship is cloned once and every cell of
+  // the copy points to the cloned ship, so the copy can be attacked freely.
+  clone(): Board {
+    const ships = new Map<Ship, Ship>();
+    const shipOf = (ship: Ship) => ships.get(ship) ?? ships.set(ship, ship.clone()).get(ship)!;
+
+    const cells = this.cells.map((cell) => {
+      const copy = new Cell(cell.position);
+      copy.attacked = cell.attacked;
+      copy.ship = cell.ship === null ? null : shipOf(cell.ship);
+      return copy;
+    });
+
+    return new Board(this.size, cells);
+  }
+
+  // The distinct ships on the board, in the order their first cell appears.
+  ships(): Ship[] {
+    return [...new Set(this.cells.flatMap((cell) => (cell.ship === null ? [] : [cell.ship])))];
   }
 
   // CU-03, 5a: the ship goes back to the pending ones.
