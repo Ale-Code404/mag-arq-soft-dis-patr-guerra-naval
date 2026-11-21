@@ -99,6 +99,13 @@ export function buildServer(game: Game): FastifyInstance {
     return send(reply, await game.fire(weapon, row, column));
   });
 
+  // CU-07, steps 1-4.
+  app.get("/api/match/statistics", async (_request, reply) => {
+    const result = game.statistics();
+    if (result.ok) return result.statistics;
+    return reply.code(result.rejection === "NO_MATCH" ? 404 : 409).send(result);
+  });
+
   // CU-06, steps 5-6, or cancelling a match.
   app.delete("/api/match", async (_request, reply) =>
     game.closeMatch() ? reply.code(204).send() : reply.code(404).send({ reason: "NO_MATCH" }),

@@ -8,6 +8,7 @@ import { MatchConfigRejection } from "../domain/match/MatchConfigRejection";
 import { MatchFactory } from "../domain/match/MatchFactory";
 import { MatchPhase } from "../domain/match/MatchPhase";
 import { AnyRejection, MatchRejection } from "../domain/match/MatchRejection";
+import { MatchStatistics } from "../domain/match/MatchStatistics";
 import { Turn } from "../domain/match/Turn";
 import { Clock } from "../domain/shared/Clock";
 import { Coordinate } from "../domain/shared/Coordinate";
@@ -41,6 +42,10 @@ export type ActionResult =
 export type ReplayRejection = "MATCH_IN_PROGRESS" | "NOT_FOUND" | "INVALID_MATCH" | "NO_REPLAY" | "NO_SUCH_TURN";
 
 export type ReplayResult = { ok: true; replay: ReplayView } | { ok: false; rejection: ReplayRejection };
+
+export type StatisticsResult =
+  | { ok: true; statistics: MatchStatistics }
+  | { ok: false; rejection: "NO_MATCH" | MatchRejection.WRONG_PHASE };
 
 type LoadedMatch = { id: string; record: FinishedMatchRecord; replay: Replay };
 
@@ -141,6 +146,14 @@ export class Game {
     if (!result.ok || this.match?.phase !== MatchPhase.FINISHED) return result;
 
     return { ...result, saved: await this.saveFinishedMatch(this.match) };
+  }
+
+  // CU-07, extending CU-06 at «partida terminada»: only a finished match has them.
+  statistics(): StatisticsResult {
+    if (this.match === null) return { ok: false, rejection: "NO_MATCH" };
+    if (this.match.phase !== MatchPhase.FINISHED) return { ok: false, rejection: MatchRejection.WRONG_PHASE };
+
+    return { ok: true, statistics: MatchStatistics.of(this.match) };
   }
 
   // CU-06, steps 5-6, and the cancellations of CU-01 and CU-03 (*a): the game
