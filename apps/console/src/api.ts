@@ -40,6 +40,28 @@ export type MatchConfig = {
   enabledWeapons: { type: string; ammo: number }[];
 };
 
+// CU-09, step 1. Null fields: the saved match cannot be read.
+export type FinishedMatchSummary = { id: string; finishedAt: string | null; winner: Side | null };
+// CU-10: both fleets are visible; turn 0 is the initial state.
+export type ReplayView = {
+  id: string;
+  finishedAt: string;
+  winner: Side;
+  turn: number;
+  totalTurns: number;
+  playerBoard: BoardView;
+  opponentBoard: BoardView;
+  lastTurn: TurnView | null;
+};
+// CU-07. precision null means «sin disparos» (2a).
+export type MatchStatistics = {
+  precision: number | null;
+  hits: number;
+  damagingShots: number;
+  turns: { total: number; player: number; opponent: number };
+  shipsSunk: { player: number; opponent: number };
+};
+
 const baseUrl = process.env.API_URL ?? "http://127.0.0.1:3000";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; reason: string };
@@ -73,4 +95,14 @@ export const api = {
     request<ActionResult>("POST", "/match/shots", { weapon, ...target }),
   // CU-06, steps 5-6.
   closeMatch: () => request<null>("DELETE", "/match"),
+  // CU-07.
+  getStatistics: () => request<MatchStatistics>("GET", "/match/statistics"),
+  // CU-09, step 1.
+  listMatches: () => request<FinishedMatchSummary[]>("GET", "/matches"),
+  // CU-10, steps 1-3 (with CU-09, steps 2-4).
+  loadReplay: (id: string) => request<ReplayView>("POST", "/replay", { id }),
+  // CU-10, step 5, 4a1 and 4a2.
+  replayAt: (turn: number) => request<ReplayView>("GET", `/replay/turns/${turn}`),
+  // CU-10, steps 6-7.
+  closeReplay: () => request<null>("DELETE", "/replay"),
 };

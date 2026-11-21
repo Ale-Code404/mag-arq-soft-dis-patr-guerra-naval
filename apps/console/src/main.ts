@@ -7,14 +7,20 @@ import {
   BoardView,
   CellState,
   MatchConfig,
+  MatchStatistics,
   MatchView,
   OutcomeType,
   Position,
+  ReplayView,
   TurnView,
 } from "./api";
 
 // D-17: recon results stay visible for 10 seconds; the timer lives here.
 const RECON_VISIBLE_MS = 10_000;
+
+// CU-10, step 5: one turn per interval. Pendiente in the CU: its value and
+// whether the Jugador may change it.
+const REPLAY_INTERVAL_MS = 1_000;
 
 // RNF-03: each cell state has its own symbol in the console.
 const symbol: Record<CellState, string> = {
@@ -64,6 +70,10 @@ const rejectionText: Record<string, string> = {
   NO_AMMO: "no queda munición para esa arma",
   AREA_OUT_OF_BOARD: "el área de ataque se sale del tablero",
   AREA_ALREADY_ATTACKED: "toda esa área ya fue atacada",
+  NOT_FOUND: "esa partida guardada no existe",
+  INVALID_MATCH: "la partida guardada no se puede leer o su contenido no es válido",
+  NO_REPLAY: "no hay ninguna partida cargada",
+  NO_SUCH_TURN: "ese turno no existe",
 };
 
 const explain = (reason: string) => rejectionText[reason] ?? reason;
@@ -133,6 +143,42 @@ function describeConfig(config: MatchConfig): string {
   ].join("\n");
 }
 
+// CU-07, step 4.
+function describeStatistics(statistics: MatchStatistics): string {
+  const precision =
+    statistics.precision === null
+      ? "sin disparos"
+      : `${Math.round(statistics.precision * 100)} % (${statistics.hits} de ${statistics.damagingShots})`;
+  const { turns, shipsSunk } = statistics;
+  return [
+    `Precisión: ${precision}`,
+    `Turnos consumidos: ${turns.total} (tuyos ${turns.player}, del oponente ${turns.opponent})`,
+    `Barcos destruidos: del oponente ${shipsSunk.opponent}, tuyos ${shipsSunk.player}`,
+  ].join("\n");
+}
+
+const winnerName = (winner: string | null) =>
+  winner === "PLAYER" ? "tú" : winner === "OPPONENT" ? "el oponente" : "desconocido";
+
+// CU-10, steps 3 and 5: both fleets, the turn that led here and, at the end,
+// the result. A recon turn is drawn over the board it flew over.
+function drawReplay(replay: ReplayView): string {
+  const last = replay.lastTurn;
+  const overlay =
+    last?.weapon === "RECON_PLANE" ? new Map(last.outcomes.map((o) => [`${o.row},${o.column}`, o.result])) : undefined;
+  const onPlayer = last?.side === "OPPONENT";
+
+  return [
+    replay.turn === 0 ? `Estado inicial (${replay.totalTurns} turnos)` : `Turno ${replay.turn} de ${replay.totalTurns}`,
+    last ? describeTurn(last) : "",
+    drawBoard("Tu flota", replay.playerBoard, onPlayer ? overlay : undefined),
+    drawBoard("Flota del oponente", replay.opponentBoard, onPlayer ? undefined : overlay),
+    replay.turn === replay.totalTurns ? `Fin de la partida. Ganador: ${winnerName(replay.winner)}.` : "",
+  ]
+    .filter((part) => part !== "")
+    .join("\n\n");
+}
+
 const prompt = createInterface({ input, output });
 const lines = prompt[Symbol.asyncIterator]();
 
@@ -197,7 +243,7 @@ function phaseOptions(match: MatchView | null): string {
     case "IN_PROGRESS":
       return "6) Disparar  9) Abandonar partida";
     case "FINISHED":
-      return "6) Cerrar partida";
+      return "6) Cerrar partida  7) Ver estadísticas";
     default:
       return "";
   }
@@ -210,6 +256,7 @@ async function menu(): Promise<boolean> {
 
   console.log(
     "\n1) Ver configuración  2) Cambiar tablero  3) Cambiar dificultad  4) Iniciar partida  5) Ver partida" +
+      "  R) Reproducir partida" +
       (extra ? "\n" + extra : "") +
       "  0) Salir",
   );
@@ -245,6 +292,10 @@ async function menu(): Promise<boolean> {
       else console.log(drawMatch(match) + (match.phase === "PLACEMENT" ? "\nFlota:\n" + drawFleet(match) : ""));
       return true;
     }
+    case "R":
+    case "r":
+      await replayMatch();
+      return true;
     case "0":
       return false;
   }
@@ -313,7 +364,111 @@ async function phaseAction(match: MatchView, option: string): Promise<boolean> {
     console.log(result.ok ? "Partida cerrada." : explain(result.reason));
     return true;
   }
+  if (match.phase === "FINISHED" && option === "7") {
+    // CU-07, steps 1-4; closing it shows the result again (steps 5-6).
+    const result = await api.getStatistics();
+    console.log(result.ok ? describeStatistics(result.data) : explain(result.reason));
+    console.log(`\nGanador: ${winnerName(match.winner)}.`);
+    return true;
+  }
   return false;
+}
+
+// CU-10, including CU-09.
+async function replayMatch(): Promise<void> {
+  // CU-09, steps 1-2, 1a and 2a.
+  const list = await api.listMatches();
+  if (!list.ok) {
+    console.log(explain(list.reason));
+    return;
+  }
+  if (list.data.length === 0) {
+    console.log("No hay partidas guardadas.");
+    return;
+  }
+
+  let replay: ReplayView | null = null;
+  while (replay === null) {
+    list.data.forEach((saved, i) =>
+      console.log(
+        `  ${i + 1}) ${saved.finishedAt ?? "(no se puede leer)"} · ganador: ${winnerName(saved.winner)}`,
+      ),
+    );
+    const option = Number(await ask("Partida (0 para cancelar): "));
+    if (option === 0) return;
+
+    const chosen = list.data[option - 1];
+    if (!chosen) {
+      console.log("Opción no válida.");
+      continue;
+    }
+
+    // CU-09, step 3 and 3a: an invalid match is not loaded; back to the list.
+    const loaded = await api.loadReplay(chosen.id);
+    if (loaded.ok) replay = loaded.data;
+    else console.log(`No se pudo cargar: ${explain(loaded.reason)}.`);
+  }
+
+  console.log(drawReplay(replay));
+
+  while (true) {
+    const option = (
+      await ask("\nA) Automático  S) Siguiente  P) Anterior  0) Cerrar reproducción\n> ")
+    ).trim().toUpperCase();
+
+    if (option === "0") break;
+
+    if (option === "S" || option === "P") {
+      // 4a1 and 4a2.
+      const next = replay.turn + (option === "S" ? 1 : -1);
+      if (next > replay.totalTurns) console.log("No hay más turnos.");
+      else if (next < 0) console.log("Estás en el estado inicial; no hay turno anterior.");
+      else {
+        const result = await api.replayAt(next);
+        if (result.ok) replay = result.data;
+        console.log(result.ok ? drawReplay(replay) : explain(result.reason));
+      }
+      continue;
+    }
+
+    if (option === "A") {
+      replay = await playAutomatically(replay);
+      continue;
+    }
+
+    console.log("Opción no válida.");
+  }
+
+  // Steps 6-7.
+  await api.closeReplay();
+  console.log("Reproducción cerrada.");
+}
+
+// CU-10, step 5 and 5a: a turn per interval until the last one, or until the
+// Jugador presses Enter; then it stays on that turn, step by step.
+async function playAutomatically(from: ReplayView): Promise<ReplayView> {
+  console.log("(Pulsa Enter para detener.)");
+  let stopped = false;
+  const stop = lines.next().then(() => (stopped = true));
+  let replay = from;
+
+  while (!stopped && replay.turn < replay.totalTurns) {
+    await Promise.race([new Promise((resolve) => setTimeout(resolve, REPLAY_INTERVAL_MS)), stop]);
+    if (stopped) break;
+
+    const result = await api.replayAt(replay.turn + 1);
+    if (!result.ok) break;
+    replay = result.data;
+    console.log("\n" + drawReplay(replay));
+  }
+
+  if (!stopped) {
+    output.write("Pulsa Enter para continuar.");
+    await stop;
+  } else {
+    console.log(`Detenida en ${replay.turn === 0 ? "el estado inicial" : `el turno ${replay.turn}`}.`);
+  }
+  return replay;
 }
 
 try {
