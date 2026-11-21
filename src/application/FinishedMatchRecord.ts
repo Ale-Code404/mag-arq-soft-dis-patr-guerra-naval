@@ -3,6 +3,7 @@ import { Orientation } from "../domain/fleet/Orientation";
 import { Ship } from "../domain/fleet/Ship";
 import { Match } from "../domain/match/Match";
 import { Player } from "../domain/player/Player";
+import { PlayerAccount } from "./PlayerRepository";
 import { Replay, ReplayTurn } from "../domain/replay/Replay";
 import { Coordinate } from "../domain/shared/Coordinate";
 import { CellOutcome } from "../domain/weapon/CellOutcome";
@@ -16,6 +17,8 @@ type Position = { row: number; column: number };
 // the initial placement and every turn (RF-11, RF-13). CU-09 reads it back.
 export type FinishedMatchRecord = {
   finishedAt: string;
+  // Who played it; null for matches saved before there were players.
+  player: PlayerAccount | null;
   winner: Side;
   config: {
     boardSize: number;
@@ -37,13 +40,18 @@ export type FinishedMatchRecord = {
   }[];
 };
 
-export function toFinishedMatchRecord(match: Match, finishedAt: Date): FinishedMatchRecord {
+export function toFinishedMatchRecord(
+  match: Match,
+  finishedAt: Date,
+  player: PlayerAccount | null = null,
+): FinishedMatchRecord {
   const side = (player: Player): Side => (player === match.human ? "PLAYER" : "OPPONENT");
   const position = ({ row, column }: Position): Position => ({ row, column });
   const { config } = match;
 
   return {
     finishedAt: finishedAt.toISOString(),
+    player: player === null ? null : { id: player.id, name: player.name },
     winner: side(match.winner!),
     config: {
       boardSize: config.boardSize,

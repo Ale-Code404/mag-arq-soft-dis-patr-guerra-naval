@@ -17,6 +17,7 @@ import { Replay } from "../domain/replay/Replay";
 import { WeaponType } from "../domain/weapon/WeaponType";
 import { FinishedMatchRecord, toFinishedMatchRecord, toReplay } from "./FinishedMatchRecord";
 import { FinishedMatchRepository, FinishedMatchSummary } from "./FinishedMatchRepository";
+import { PlayerAccount } from "./PlayerRepository";
 import { MatchView, ReplayView, toMatchView, toReplayView, toTurnViews, TurnView } from "./MatchView";
 
 export type ConfigureMatchInput = {
@@ -50,6 +51,8 @@ export type StatisticsResult =
 type LoadedMatch = { id: string; record: FinishedMatchRecord; replay: Replay };
 
 export type GameOptions = {
+  // Who plays this game's matches; saved with each finished one.
+  player?: PlayerAccount;
   config?: MatchConfig;
   random?: Random;
   clock?: Clock;
@@ -65,8 +68,10 @@ export class Game {
   private readonly random: Random;
   private readonly clock: Clock;
   private readonly repository: FinishedMatchRepository | null;
+  readonly player: PlayerAccount | null;
 
   constructor(options: GameOptions = {}) {
+    this.player = options.player ?? null;
     this.config = options.config ?? MatchConfig.defaults();
     this.random = options.random ?? Math.random;
     this.clock = options.clock ?? (() => new Date());
@@ -230,7 +235,7 @@ export class Game {
     if (this.repository === null) return false;
 
     try {
-      await this.repository.save(toFinishedMatchRecord(match, this.clock()));
+      await this.repository.save(toFinishedMatchRecord(match, this.clock(), this.player));
       return true;
     } catch {
       return false;
