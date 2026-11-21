@@ -74,7 +74,8 @@ const rejectionText: Record<string, string> = {
   INVALID_MATCH: "la partida guardada no se puede leer o su contenido no es válido",
   NO_REPLAY: "no hay ninguna partida cargada",
   NO_SUCH_TURN: "ese turno no existe",
-  NO_SESSION: "la sesión no es válida; vuelve a entrar con tu nombre",
+  NO_SESSION: "la sesión no es válida; vuelve a entrar con tu código",
+  INVALID_CODE: "ese código no corresponde a ningún jugador",
   INVALID_NAME: "el nombre debe tener entre 1 y 30 caracteres",
 };
 
@@ -473,18 +474,34 @@ async function playAutomatically(from: ReplayView): Promise<ReplayView> {
   return replay;
 }
 
-// Who plays: the API keeps one match per player and remembers it by name.
+// Who plays: the API keeps one match per player, found by the player's code.
 async function signIn(): Promise<boolean> {
   while (true) {
-    const name = (await ask("Tu nombre (vacío para salir): ")).trim();
-    if (name === "" || name === "0") return false;
+    const option = (await ask("\n1) Soy un jugador nuevo  2) Tengo mi código  0) Salir\n> ")).trim();
+    if (option === "0") return false;
 
-    const result = await api.signIn(name);
-    if (result.ok) {
-      console.log(`Hola, ${result.data.player.name}.`);
+    if (option === "1") {
+      const result = await api.register(await ask("Tu nombre: "));
+      if (!result.ok) {
+        console.log(`No se pudo crear: ${explain(result.reason)}.`);
+        continue;
+      }
+      console.log(`Hola, ${result.data.player.name}. Tu código es ${result.data.code}`);
+      console.log("Guárdalo: es la única forma de volver a tu partida y no se puede mostrar de nuevo.");
       return true;
     }
-    console.log(`No se pudo entrar: ${explain(result.reason)}.`);
+
+    if (option === "2") {
+      const result = await api.signIn((await ask("Tu código: ")).trim());
+      if (result.ok) {
+        console.log(`Hola de nuevo, ${result.data.player.name}.`);
+        return true;
+      }
+      console.log(`No se pudo entrar: ${explain(result.reason)}.`);
+      continue;
+    }
+
+    console.log("Opción no válida.");
   }
 }
 

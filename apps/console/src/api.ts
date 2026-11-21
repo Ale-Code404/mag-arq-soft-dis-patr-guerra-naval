@@ -91,8 +91,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  // The same name finds the same player and its match.
-  signIn: (name: string) => request<{ player: PlayerAccount }>("POST", "/session", { name }),
+  // A new player; its code comes only in this answer.
+  register: (name: string) => request<{ player: PlayerAccount; code: string }>("POST", "/players", { name }),
+  // The code finds the player and its match.
+  signIn: (code: string) => request<{ player: PlayerAccount }>("POST", "/session", { code }),
   getConfig: () => request<MatchConfig>("GET", "/config"),
   configure: (input: Partial<MatchConfig>) => request<MatchConfig>("PUT", "/config", input),
   startMatch: () => request<MatchView>("POST", "/match"),

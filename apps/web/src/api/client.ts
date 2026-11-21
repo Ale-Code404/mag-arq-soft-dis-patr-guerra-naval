@@ -111,7 +111,8 @@ export type Rejection =
   | "NO_REPLAY"
   | "NO_SUCH_TURN"
   | "NO_SESSION"
-  | "INVALID_NAME";
+  | "INVALID_NAME"
+  | "INVALID_CODE";
 
 export class ApiError extends Error {
   constructor(
@@ -143,8 +144,10 @@ export const api = {
       if (error instanceof ApiError && error.status === 401) return null;
       throw error;
     }),
-  // The same name finds the same player and its match.
-  signIn: (name: string) => request<{ player: PlayerAccount }>("POST", "/session", { name }),
+  // A new player; its code comes only in this answer.
+  register: (name: string) => request<{ player: PlayerAccount; code: string }>("POST", "/players", { name }),
+  // The code finds the player and its match.
+  signIn: (code: string) => request<{ player: PlayerAccount }>("POST", "/session", { code }),
   signOut: () => request<null>("DELETE", "/session").catch(() => null),
   getConfig: () => request<MatchConfig>("GET", "/config"),
   configure: (input: ConfigureMatchInput) => request<MatchConfig>("PUT", "/config", input),

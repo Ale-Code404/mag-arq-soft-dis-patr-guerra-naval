@@ -30,6 +30,9 @@ const RECON_VISIBLE_MS = 10_000;
 // Who plays; null until the player signs in with a name.
 const player = ref<PlayerAccount | null>(null);
 const playerName = ref("");
+const playerCode = ref("");
+// Shown once, right after creating the player; the server cannot show it again.
+const newCode = ref<string | null>(null);
 const ready = ref(false);
 
 const config = ref<MatchConfig | null>(null);
@@ -96,7 +99,8 @@ const rejectionText: Record<Rejection, string> = {
   INVALID_MATCH: "La partida guardada no se puede leer o su contenido no es válido.",
   NO_REPLAY: "No hay ninguna partida cargada.",
   NO_SUCH_TURN: "Ese turno no existe.",
-  NO_SESSION: "Tu sesión terminó; vuelve a entrar con tu nombre.",
+  NO_SESSION: "Tu sesión terminó; vuelve a entrar con tu código.",
+  INVALID_CODE: "Ese código no corresponde a ningún jugador.",
   INVALID_NAME: "El nombre debe tener entre 1 y 30 caracteres.",
 };
 
@@ -381,11 +385,20 @@ function leave() {
   saved.value = null;
   statistics.value = null;
   replaying.value = false;
+  newCode.value = null;
 }
+
+const register = () =>
+  run(async () => {
+    const { player: account, code } = await api.register(playerName.value);
+    newCode.value = code;
+    await enter(account);
+  });
 
 const signIn = () =>
   run(async () => {
-    const { player: account } = await api.signIn(playerName.value);
+    const { player: account } = await api.signIn(playerCode.value.trim());
+    playerCode.value = "";
     await enter(account);
   });
 
@@ -418,14 +431,23 @@ onUnmounted(() => {
       <h2>¿Quién juega?</h2>
       <form @submit.prevent="signIn">
         <label>
-          Tu nombre
-          <input v-model="playerName" type="text" maxlength="30" autocomplete="nickname" required />
+          Tu código
+          <input v-model="playerCode" type="text" maxlength="32" autocomplete="off" spellcheck="false" required />
         </label>
         <div class="actions">
           <button type="submit" class="primary">Entrar</button>
         </div>
       </form>
-      <p class="hint">Con el mismo nombre vuelves a tu partida y a tus partidas guardadas.</p>
+      <form @submit.prevent="register">
+        <label>
+          ¿Eres nuevo? Tu nombre
+          <input v-model="playerName" type="text" maxlength="30" autocomplete="nickname" required />
+        </label>
+        <div class="actions">
+          <button type="submit">Crear jugador</button>
+        </div>
+      </form>
+      <p class="hint">Con tu código vuelves a tu partida y a tus partidas guardadas, desde este u otro navegador.</p>
       <p v-if="message" class="message" role="status">{{ message }}</p>
     </section>
 
@@ -434,6 +456,16 @@ onUnmounted(() => {
         Jugador: <strong>{{ player.name }}</strong>
         <button type="button" class="ghost" @click="signOut">Cambiar de jugador</button>
       </p>
+      <section v-if="newCode" class="panel">
+        <h2>Tu código: <code>{{ newCode }}</code></h2>
+        <p class="hint">
+          Guárdalo: es la única forma de volver a tu partida desde otro navegador o si cierras la sesión,
+          y no se puede mostrar de nuevo.
+        </p>
+        <div class="actions">
+          <button type="button" @click="newCode = null">Ya lo guardé</button>
+        </div>
+      </section>
 
       <section v-if="!match && !replaying" class="panel">
         <h2>Configurar partida</h2>
