@@ -1,5 +1,6 @@
 import { FinishedMatchRecord } from "../src/application/FinishedMatchRecord";
 import { FinishedMatchRepository, FinishedMatchSummary } from "../src/application/FinishedMatchRepository";
+import { PlayerAccount, PlayerRepository } from "../src/application/PlayerRepository";
 import { Random } from "../src/domain/shared/Random";
 
 // Mulberry32: a small seeded generator, so every run plays the same match.
@@ -37,5 +38,19 @@ export class InMemoryMatchRepository implements FinishedMatchRepository {
 
   private all(): unknown[] {
     return [...this.records, ...this.stored];
+  }
+}
+
+export class InMemoryPlayerRepository implements PlayerRepository {
+  players: PlayerAccount[] = [];
+
+  async findByName(name: string): Promise<PlayerAccount | null> {
+    return this.players.find((player) => player.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+  }
+
+  async create(name: string): Promise<PlayerAccount> {
+    const player = { id: `player-${this.players.length + 1}`, name: name.trim() };
+    this.players.push(player);
+    return player;
   }
 }
