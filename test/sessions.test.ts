@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -23,11 +23,18 @@ function newServer() {
   return { app: buildServer(lobby, { logger: false }), lobby, saved };
 }
 
-// Signs in and returns the cookie a browser would send back.
-async function signIn(app: ReturnType<typeof buildServer>, name: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/session", payload: { name } });
+const cookieOf = (response: { headers: Record<string, unknown> }) =>
+  String(response.headers["set-cookie"]).split(";")[0];
+
+// Registers a new player; returns the cookie a browser would send back and the code.
+async function register(app: ReturnType<typeof buildServer>, name: string) {
+  const response = await app.inject({ method: "POST", url: "/api/players", payload: { name } });
   assert.equal(response.statusCode, 201);
-  return String(response.headers["set-cookie"]).split(";")[0];
+  return { cookie: cookieOf(response), code: response.json().code as string };
+}
+
+async function signIn(app: ReturnType<typeof buildServer>, code: unknown) {
+  return app.inject({ method: "POST", url: "/api/session", payload: { code } });
 }
 
 test("without a session the game cannot be reached", async () => {
@@ -41,8 +48,8 @@ test("without a session the game cannot be reached", async () => {
 
 test("each player plays its own match in the same process", async () => {
   const { app } = newServer();
-  const ana = await signIn(app, "Ana");
-  const beto = await signIn(app, "Beto");
+  const { cookie: ana } = await register(app, "Ana");
+  const { cookie: beto } = await register(app, "Beto");
 
   await app.inject({ method: "PUT", url: "/api/config", headers: { cookie: beto }, payload: { boardSize: 10 } });
   assert.equal((await app.inject({ method: "POST", url: "/api/match", headers: { cookie: ana } })).statusCode, 201);
@@ -54,13 +61,19 @@ test("each player plays its own match in the same process", async () => {
   assert.equal((await app.inject({ method: "GET", url: "/api/match", headers: { cookie: ana } })).json().ownBoard.size, 8);
 });
 
-test("signing in again with the same name finds the same player and match", async () => {
+test("the player's code, not its name, finds the same player and match", async () => {
   const { app } = newServer();
-  const first = await signIn(app, "Ana");
+  const { cookie: first, code } = await register(app, "Ana");
   await app.inject({ method: "POST", url: "/api/match", headers: { cookie: first } });
 
+  // Another player with the same name is someone else.
+  const { cookie: namesake } = await register(app, "Ana");
+  assert.equal((await app.inject({ method: "GET", url: "/api/match", headers: { cookie: namesake } })).statusCode, 404);
+
   // Another browser, another session, the same player.
-  const second = await signIn(app, "  ana ");
+  const response = await signIn(app, code);
+  assert.equal(response.statusCode, 201);
+  const second = cookieOf(response);
   assert.notEqual(second, first);
   const session = await app.inject({ method: "GET", url: "/api/session", headers: { cookie: second } });
   assert.equal(session.json().player.name, "Ana");
@@ -72,18 +85,23 @@ test("signing in again with the same name finds the same player and match", asyn
   assert.equal((await app.inject({ method: "GET", url: "/api/match", headers: { cookie: first } })).statusCode, 200);
 });
 
-test("a name must have between 1 and 30 characters", async () => {
+test("a name must have between 1 and 30 characters, and an unknown code is refused", async () => {
   const { app } = newServer();
   for (const name of ["", "   ", "x".repeat(31), 42]) {
-    const response = await app.inject({ method: "POST", url: "/api/session", payload: { name } });
+    const response = await app.inject({ method: "POST", url: "/api/players", payload: { name } });
     assert.equal(response.statusCode, 422, `name ${JSON.stringify(name)}`);
+  }
+  for (const code of ["", "ffffffffffffffff", "Ana", 7, undefined]) {
+    const response = await signIn(app, code);
+    assert.equal(response.statusCode, 401, `code ${JSON.stringify(code)}`);
+    assert.equal(response.headers["set-cookie"], undefined);
   }
 });
 
 test("each player only sees its own saved matches, which record who played them", async () => {
   const { app, lobby, saved } = newServer();
-  const ana = await signIn(app, "Ana");
-  const beto = await signIn(app, "Beto");
+  const { cookie: ana } = await register(app, "Ana");
+  const { cookie: beto } = await register(app, "Beto");
 
   const { game, player } = (await lobby.resume(ana.split("=")[1]))!;
   game.startMatch();
@@ -100,15 +118,19 @@ test("each player only sees its own saved matches, which record who played them"
   assert.deepEqual((await app.inject({ method: "GET", url: "/api/matches", headers: { cookie: beto } })).json(), []);
 });
 
-test("players are remembered by name after a restart", async () => {
+test("players are found by code after a restart, and the file keeps no code", async () => {
   const file = join(await mkdtemp(join(tmpdir(), "players-")), "players.json");
+  const repository = new JsonFilePlayerRepository(file);
 
-  const created = await new JsonFilePlayerRepository(file).create("Ana");
-  const [again, other] = await Promise.all([
-    new JsonFilePlayerRepository(file).findByName("ANA"),
-    new JsonFilePlayerRepository(file).findByName("Beto"),
-  ]);
+  const [ana, beto] = await Promise.all([repository.create("Ana"), repository.create("Beto")]);
+  assert.match(ana.code, /^[0-9a-f]{16}$/);
+  assert.notEqual(ana.code, beto.code);
 
-  assert.deepEqual(again, created);
-  assert.equal(other, null);
+  const restarted = new JsonFilePlayerRepository(file);
+  assert.deepEqual(await restarted.findByCode(ana.code), ana.player);
+  assert.deepEqual(await restarted.findByCode(beto.code.toUpperCase()), beto.player);
+  assert.equal(await restarted.findByCode("Ana"), null);
+
+  const stored = await readFile(file, "utf8");
+  assert.ok(!stored.includes(ana.code) && !stored.includes(beto.code));
 });

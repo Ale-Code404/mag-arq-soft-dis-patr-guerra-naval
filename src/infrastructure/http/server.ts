@@ -78,10 +78,19 @@ export function buildServer(lobby: Lobby, { logger = true } = {}): FastifyInstan
   const app = Fastify({ logger });
   app.decorateRequest("game", null as unknown as Game);
 
-  // Signing in: the same name finds the same player.
-  app.post<{ Body: { name: string } }>("/api/session", async (request, reply) => {
-    const result = await lobby.signIn(request.body?.name);
+  // A new player: its code is in this answer only, and a session is opened.
+  app.post<{ Body: { name: string } }>("/api/players", async (request, reply) => {
+    const result = await lobby.register(request.body?.name);
     if (!result.ok) return reply.code(422).send(result);
+
+    const { player, code } = result;
+    return reply.header("set-cookie", sessionCookie(result.token)).code(201).send({ player, code });
+  });
+
+  // Signing in again, here or in another browser, with the player's code.
+  app.post<{ Body: { code: string } }>("/api/session", async (request, reply) => {
+    const result = await lobby.signIn(request.body?.code);
+    if (!result.ok) return reply.code(401).send(result);
 
     return reply.header("set-cookie", sessionCookie(result.token)).code(201).send({ player: result.player });
   });

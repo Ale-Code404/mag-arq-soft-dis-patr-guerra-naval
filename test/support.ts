@@ -42,15 +42,17 @@ export class InMemoryMatchRepository implements FinishedMatchRepository {
 }
 
 export class InMemoryPlayerRepository implements PlayerRepository {
-  players: PlayerAccount[] = [];
+  players: (PlayerAccount & { code: string })[] = [];
 
-  async findByName(name: string): Promise<PlayerAccount | null> {
-    return this.players.find((player) => player.name.toLowerCase() === name.trim().toLowerCase()) ?? null;
+  async create(name: string): Promise<{ player: PlayerAccount; code: string }> {
+    const player = { id: `player-${this.players.length + 1}`, name };
+    const code = (this.players.length + 1).toString(16).padStart(16, "0");
+    this.players.push({ ...player, code });
+    return { player, code };
   }
 
-  async create(name: string): Promise<PlayerAccount> {
-    const player = { id: `player-${this.players.length + 1}`, name: name.trim() };
-    this.players.push(player);
-    return player;
+  async findByCode(code: string): Promise<PlayerAccount | null> {
+    const found = this.players.find((player) => player.code === code);
+    return found === undefined ? null : { id: found.id, name: found.name };
   }
 }
