@@ -7,6 +7,7 @@ import {
   type Difficulty,
   type FirstTurn,
   type MatchConfig,
+  type MatchStatistics,
   type MatchView,
   type Orientation,
   type OutcomeType,
@@ -17,6 +18,7 @@ import {
   type WeaponType,
 } from "./api/client";
 import BoardGrid from "./components/BoardGrid.vue";
+import ReplayPanel from "./components/ReplayPanel.vue";
 import { canAttack, weaponArea as areaOf } from "./areas";
 import { cellKey, cellLabel } from "./coordinates";
 import { turnEffect, type CellEffect } from "./effects";
@@ -29,6 +31,10 @@ const match = ref<MatchView | null>(null);
 const message = ref("");
 const turns = ref<TurnView[]>([]);
 const saved = ref<boolean | null>(null);
+// CU-07: shown on request over the result; null while closed.
+const statistics = ref<MatchStatistics | null>(null);
+// CU-10: the configuration is hidden while a saved match is replayed.
+const replaying = ref(false);
 
 const selectedShip = ref<number | null>(null);
 const orientation = ref<Orientation>("HORIZONTAL");
@@ -80,6 +86,10 @@ const rejectionText: Record<Rejection, string> = {
   NO_AMMO: "No queda munición para esa arma.",
   AREA_OUT_OF_BOARD: "El área de ataque se sale del tablero.",
   AREA_ALREADY_ATTACKED: "Toda esa área ya fue atacada.",
+  NOT_FOUND: "Esa partida guardada ya no existe.",
+  INVALID_MATCH: "La partida guardada no se puede leer o su contenido no es válido.",
+  NO_REPLAY: "No hay ninguna partida cargada.",
+  NO_SUCH_TURN: "Ese turno no existe.",
 };
 
 const weaponName: Record<WeaponType, string> = {
@@ -261,6 +271,7 @@ const startMatch = () =>
     stopAnimations();
     turns.value = [];
     saved.value = null;
+    statistics.value = null;
     orientation.value = "HORIZONTAL";
     selectedShip.value = firstPendingShip(match.value);
   });
@@ -317,6 +328,17 @@ const fireAt = (row: number, column: number) =>
     if (weapon?.ammo === 0) selectedWeapon.value = "MISSILE";
   });
 
+// CU-07, steps 1-4.
+const showStatistics = () =>
+  run(async () => {
+    statistics.value = await api.getStatistics();
+  });
+
+const precisionText = (stats: MatchStatistics) =>
+  stats.precision === null
+    ? "sin disparos"
+    : `${Math.round(stats.precision * 100)} % (${stats.hits} de ${stats.damagingShots})`;
+
 // CU-06, steps 5-6, or cancelling the match in progress.
 const closeMatch = () =>
   run(async () => {
@@ -327,6 +349,7 @@ const closeMatch = () =>
     match.value = null;
     turns.value = [];
     saved.value = null;
+    statistics.value = null;
     fillForm(await api.getConfig());
   });
 
@@ -348,7 +371,7 @@ onUnmounted(() => {
   <main>
     <h1>Guerra naval</h1>
 
-    <section v-if="!match" class="panel">
+    <section v-if="!match && !replaying" class="panel">
       <h2>Configurar partida</h2>
       <form @submit.prevent="saveConfig">
         <label>
@@ -385,9 +408,12 @@ onUnmounted(() => {
       </p>
     </section>
 
+    <!-- CU-10, including CU-09: only without a match in progress. -->
+    <ReplayPanel v-if="!match || match.phase === 'FINISHED'" :describe-turn="describeTurn" @active="(on) => (replaying = on)" />
+
     <p v-if="message" class="message" role="status">{{ message }}</p>
 
-    <template v-if="match">
+    <template v-if="match && !replaying">
       <!-- CU-03: placement of the Jugador's fleet. -->
       <section v-if="match.phase === 'PLACEMENT'" class="panel">
         <h2>Ubica tu flota</h2>
@@ -465,7 +491,18 @@ onUnmounted(() => {
             {{ saved ? "La partida se guardó." : "La partida no se pudo guardar." }}
           </template>
         </p>
+        <!-- CU-07, step 4; closing it shows the result again (steps 5-6). -->
+        <dl v-if="statistics" class="statistics">
+          <dt>Precisión</dt>
+          <dd>{{ precisionText(statistics) }}</dd>
+          <dt>Turnos consumidos</dt>
+          <dd>{{ statistics.turns.total }} (tuyos {{ statistics.turns.player }}, del oponente {{ statistics.turns.opponent }})</dd>
+          <dt>Barcos destruidos</dt>
+          <dd>del oponente {{ statistics.shipsSunk.opponent }}, tuyos {{ statistics.shipsSunk.player }}</dd>
+        </dl>
         <div class="actions">
+          <button v-if="!statistics" type="button" @click="showStatistics">Ver estadísticas</button>
+          <button v-else type="button" @click="statistics = null">Cerrar estadísticas</button>
           <button type="button" class="primary" @click="closeMatch">Cerrar partida</button>
         </div>
       </section>

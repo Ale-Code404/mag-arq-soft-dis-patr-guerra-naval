@@ -574,3 +574,19 @@ button.active {
     animation: none !important;
   }
 }
+
+/* CU-07: statistics of the finished match. */
+.statistics {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.statistics dt {
+  font-weight: 600;
+}
+
+.statistics dd {
+  margin: 0;
+}
