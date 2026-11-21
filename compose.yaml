@@ -32,7 +32,8 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      HOST: 0.0.0.0
+      # "::" as on Railway: IPv4 and IPv6.
+      HOST: "::"
       PORT: 3000
     depends_on:
       db:

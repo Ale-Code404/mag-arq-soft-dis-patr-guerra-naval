@@ -1,0 +1,20 @@
+# One origin for the page and the API, as the Vite proxy does in development,
+# so the session cookie (SameSite=Lax) travels with every call. The official
+# image fills ${PORT} and ${API_UPSTREAM} from the environment on start:
+# api:3000 in compose, api.railway.internal:3000 on Railway.
+server {
+  listen ${PORT};
+  listen [::]:${PORT};
+  root /usr/share/nginx/html;
+
+  location /api/ {
+    proxy_pass http://${API_UPSTREAM};
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    try_files $uri /index.html;
+  }
+}

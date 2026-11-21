@@ -7,6 +7,11 @@ COPY apps/web ./
 RUN npm run build
 
 FROM nginx:1.27-alpine
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# Defaults for compose; Railway sets PORT, and API_UPSTREAM in the service.
+ENV PORT=80 API_UPSTREAM=api:3000
+# The image turns templates/*.template into conf.d/*.conf with envsubst; only
+# these two names are replaced, so nginx's own $host and $uri stay.
+ENV NGINX_ENVSUBST_FILTER="^(PORT|API_UPSTREAM)$"
+COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /web/dist /usr/share/nginx/html
 EXPOSE 80
