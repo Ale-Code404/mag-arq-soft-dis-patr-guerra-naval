@@ -10,9 +10,10 @@ const UNLIMITED_AMMO = Number.POSITIVE_INFINITY;
 // D-17: the recon plane shows the cells for 10 seconds.
 const RECON_REVEAL_SECONDS = 10;
 
-// Factory Method: translates a weapon type into its class and size (Armas table,
-// D-16). CU-01 uses it to hand out each side's arsenal and CU-09 will reuse it
-// when it loads a match.
+// Simple factory, not Factory Method (D-27): one static method translates a
+// weapon type into its class and size (Armas table, D-16), with no subclass
+// deciding what to create. CU-01 uses it to hand out each side's arsenal. The
+// replay (CU-10) does not need it, because it never runs the weapons again.
 export class WeaponFactory {
   static create(type: WeaponType, ammo: number): Weapon {
     switch (type) {
