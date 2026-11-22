@@ -6,8 +6,9 @@ import { Game } from "../src/application/Game";
 import { Orientation } from "../src/domain/fleet/Orientation";
 import { MatchPhase } from "../src/domain/match/MatchPhase";
 import { WeaponType } from "../src/domain/weapon/WeaponType";
-import { connect } from "../src/infrastructure/database/connect";
+import { connect, connectAdmin } from "../src/infrastructure/database/connect";
 import { migrate } from "../src/infrastructure/database/migrate";
+import { setUpDatabase } from "../src/infrastructure/database/setup";
 import { MySqlMatchRepository } from "../src/infrastructure/persistence/MySqlMatchRepository";
 import { MySqlPlayerRepository } from "../src/infrastructure/persistence/MySqlPlayerRepository";
 import { seeded } from "./support";
@@ -19,8 +20,8 @@ let pool: Pool;
 
 before(async () => {
   if (skip) return;
+  await setUpDatabase();
   pool = connect();
-  await migrate(pool);
 });
 
 after(async () => {
@@ -28,7 +29,12 @@ after(async () => {
 });
 
 test("migrations create the tables once (players, matches)", { skip }, async () => {
-  assert.deepEqual(await migrate(pool), []);
+  const admin = connectAdmin();
+  try {
+    assert.deepEqual(await migrate(admin), []);
+  } finally {
+    await admin.end();
+  }
 
   const [tables] = await pool.query<RowDataPacket[]>(
     "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY name",
@@ -43,6 +49,8 @@ test("a player is found by its code, and the table keeps only its hash", { skip 
 
   assert.match(code, /^[0-9a-f]{16}$/);
   assert.deepEqual(await players.findByCode(code), player);
+  assert.deepEqual(await players.findById(player.id), player);
+  assert.equal(await players.findById(randomUUID()), null);
   assert.deepEqual(await players.findByCode(code.toUpperCase()), player);
   assert.equal(await players.findByCode("ffffffffffffffff"), null);
   assert.equal(await players.findByCode("' OR '1'='1"), null);
@@ -82,4 +90,19 @@ test("a finished match is saved, listed and loaded only by its player (CU-06, CU
   const otherRepository = new MySqlMatchRepository(pool, other.id);
   assert.deepEqual(await otherRepository.list(), []);
   assert.equal(await otherRepository.load(summary.id), null);
+});
+
+test("the API's user reads and writes rows but cannot change the schema", { skip }, async () => {
+  const [[{ user }]] = await pool.query<RowDataPacket[]>("SELECT CURRENT_USER() AS user");
+  assert.match(user, new RegExp(`^${process.env.DB_USER}@`));
+
+  for (const statement of [
+    "DROP TABLE matches",
+    "CREATE TABLE intruder (id INT)",
+    "ALTER TABLE players ADD COLUMN intruder INT",
+    "CREATE USER intruder IDENTIFIED BY 'intruder-password'",
+    "SELECT * FROM mysql.user",
+  ]) {
+    await assert.rejects(pool.query(statement), /denied/i, statement);
+  }
 });

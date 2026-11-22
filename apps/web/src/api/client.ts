@@ -112,7 +112,8 @@ export type Rejection =
   | "NO_SUCH_TURN"
   | "NO_SESSION"
   | "INVALID_NAME"
-  | "INVALID_CODE";
+  | "INVALID_CODE"
+  | "TOO_MANY_REQUESTS";
 
 export class ApiError extends Error {
   constructor(

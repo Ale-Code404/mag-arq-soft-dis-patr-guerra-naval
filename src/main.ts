@@ -1,26 +1,34 @@
+import { randomBytes } from "node:crypto";
 import { Game } from "./application/Game";
 import { Lobby } from "./application/Lobby";
-import { connect, waitForDatabase } from "./infrastructure/database/connect";
-import { migrate } from "./infrastructure/database/migrate";
+import { connect } from "./infrastructure/database/connect";
+import { setUpDatabase } from "./infrastructure/database/setup";
 import { buildServer } from "./infrastructure/http/server";
 import { MySqlMatchRepository } from "./infrastructure/persistence/MySqlMatchRepository";
 import { MySqlPlayerRepository } from "./infrastructure/persistence/MySqlPlayerRepository";
-import { InMemorySessionRepository } from "./infrastructure/session/InMemorySessionRepository";
 
 // Composition root: many players in one process, one game each. Players and
-// finished matches live in MySQL; each player's game sees only its matches.
+// finished matches live in MySQL, reached with a user that only reads and
+// writes rows; each player's game sees only its matches.
+const applied = await setUpDatabase();
 const pool = connect();
-await waitForDatabase(pool);
-const applied = await migrate(pool);
 
-const lobby = new Lobby(new MySqlPlayerRepository(pool), new InMemorySessionRepository(), (player) =>
+const lobby = new Lobby(new MySqlPlayerRepository(pool), (player) =>
   new Game({ player, repository: new MySqlMatchRepository(pool, player.id) }),
 );
 
-// Behind HTTPS (Railway), the session cookie must only travel over HTTPS.
-const app = buildServer(lobby, { secureCookie: process.env.SESSION_COOKIE_SECURE === "true" });
+// Without SESSION_SECRET (local development) sessions last until a restart.
+const sessionSecret = process.env.SESSION_SECRET ?? randomBytes(32).toString("hex");
+if (sessionSecret.length < 32) throw new Error("SESSION_SECRET must have at least 32 characters");
+
+const app = buildServer(lobby, {
+  // Behind HTTPS (Railway), the session cookie must only travel over HTTPS.
+  secureCookie: process.env.SESSION_COOKIE_SECURE === "true",
+  sessionSecret,
+});
 app.addHook("onClose", () => pool.end());
 if (applied.length > 0) app.log.info({ applied }, "migrations applied");
+if (!process.env.SESSION_SECRET) app.log.warn("SESSION_SECRET is not set: sessions end on restart");
 
 // In a container the API must listen on every interface ("::" also covers
 // IPv6-only private networks); locally, only here.

@@ -10,4 +10,5 @@ export interface PlayerRepository {
   // The code is returned only here; the repository may keep just a hash of it.
   create(name: string): Promise<{ player: PlayerAccount; code: string }>;
   findByCode(code: string): Promise<PlayerAccount | null>;
+  findById(id: string): Promise<PlayerAccount | null>;
 }

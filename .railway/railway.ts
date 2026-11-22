@@ -1,4 +1,11 @@
-import { database, defineRailway, project, service, volume } from "railway/iac";
+import {
+  database,
+  defineRailway,
+  preserve,
+  project,
+  service,
+  volume,
+} from "railway/iac";
 
 const REGION = "us-east4-eqdc4a";
 
@@ -9,10 +16,8 @@ const restart = {
 } as const;
 
 export default defineRailway(() => {
-  // Managed MySQL. mysql() would pin mysql:9; the running database is mysql:8,
-  // and changing a major version under existing data is not a config change.
   const MySQL = database("MySQL", "mysql", {
-    image: "mysql:8",
+    image: "mysql:8.4",
     output: "MYSQL_URL",
     defaultMountPath: "/var/lib/mysql",
     region: REGION,
@@ -54,8 +59,11 @@ export default defineRailway(() => {
     env: {
       DB_HOST: MySQL.env.MYSQLHOST,
       DB_PORT: MySQL.env.MYSQLPORT,
-      DB_USER: MySQL.env.MYSQLUSER,
-      DB_PASSWORD: MySQL.env.MYSQLPASSWORD,
+      DB_USER: "app",
+      DB_PASSWORD: preserve(),
+      DB_ADMIN_USER: MySQL.env.MYSQLUSER,
+      DB_ADMIN_PASSWORD: MySQL.env.MYSQLPASSWORD,
+      SESSION_SECRET: preserve(),
       DB_NAME: MySQL.env.MYSQLDATABASE,
       // "::" also covers IPv6-only private networks.
       HOST: "::",
@@ -78,19 +86,15 @@ export default defineRailway(() => {
       ],
     },
     deploy: { healthcheckPath: "/", ...restart },
+    domains: ["naval.alejandroacosta.dev"],
     replicas: { [REGION]: 1 },
     env: {
-      // A typed reference cannot be joined to text, so this is Railway's own
-      // reference syntax, resolved by Railway: api.railway.internal:3000.
       API_UPSTREAM: "${{api.RAILWAY_PRIVATE_DOMAIN}}:3000",
       PORT: "8080",
     },
   });
 
   return project("Mag - Sem 1 - Guerra naval", {
-    // This file owns every variable of these services: one left out is deleted.
-    // The CLI reads it (config pull --variables=managed), but railway 3.17
-    // does not declare it in ProjectDefinition yet, hence the spread.
     ...({ variables: { managed: true } } as object),
     resources: [api, web, MySQL, mysqlVolume],
   });

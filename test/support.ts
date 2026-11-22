@@ -55,4 +55,9 @@ export class InMemoryPlayerRepository implements PlayerRepository {
     const found = this.players.find((player) => player.code === code);
     return found === undefined ? null : { id: found.id, name: found.name };
   }
+
+  async findById(id: string): Promise<PlayerAccount | null> {
+    const found = this.players.find((player) => player.id === id);
+    return found === undefined ? null : { id: found.id, name: found.name };
+  }
 }

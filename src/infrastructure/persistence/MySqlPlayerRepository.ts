@@ -33,4 +33,9 @@ export class MySqlPlayerRepository implements PlayerRepository {
     ]);
     return rows.length === 0 ? null : { id: rows[0].id, name: rows[0].name };
   }
+
+  async findById(id: string): Promise<PlayerAccount | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>("SELECT id, name FROM players WHERE id = ?", [id]);
+    return rows.length === 0 ? null : { id: rows[0].id, name: rows[0].name };
+  }
 }

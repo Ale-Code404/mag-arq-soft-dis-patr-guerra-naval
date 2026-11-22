@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ActionResult, ConfigureMatchInput, Game, ReplayResult } from "../../application/Game";
 import { Lobby } from "../../application/Lobby";
+import { issueSessionToken, verifySessionToken } from "./sessionToken";
 import { Orientation } from "../../domain/fleet/Orientation";
 import { MatchRejection } from "../../domain/match/MatchRejection";
 import { MatchConfig } from "../../domain/match/MatchConfig";
@@ -68,18 +69,40 @@ function sessionToken(request: FastifyRequest): string | undefined {
 // HttpOnly keeps the token away from page scripts; Lax keeps other sites from
 // using it to play on the player's behalf.
 // Secure (behind HTTPS) keeps it off plain HTTP.
-function sessionCookie(token: string, secure: boolean, maxAge?: number): string {
-  const expiry = maxAge === undefined ? "" : `; Max-Age=${maxAge}`;
+function sessionCookie(token: string, secure: boolean, maxAge: number): string {
   const https = secure ? "; Secure" : "";
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${https}${expiry}`;
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${https}; Max-Age=${maxAge}`;
 }
+
+export type ServerOptions = {
+  logger?: boolean;
+  secureCookie?: boolean;
+  // Signs the session cookie; whoever knows it can sign in as any player.
+  sessionSecret: string;
+  sessionTtlSeconds?: number;
+};
+
+const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
 // Input adapter: translates HTTP requests into calls to the Game facade of the
 // player in session, and its results into status codes. No game rule lives here.
-export function buildServer(lobby: Lobby, { logger = true, secureCookie = false } = {}): FastifyInstance {
+export function buildServer(
+  lobby: Lobby,
+  { logger = true, secureCookie = false, sessionSecret, sessionTtlSeconds = SEVEN_DAYS }: ServerOptions,
+): FastifyInstance {
   const app = Fastify({ logger });
   app.decorateRequest("game", null as unknown as Game);
-  const cookie = (token: string, maxAge?: number) => sessionCookie(token, secureCookie, maxAge);
+
+  const openSession = (reply: FastifyReply, playerId: string) =>
+    reply.header(
+      "set-cookie",
+      sessionCookie(issueSessionToken(playerId, sessionSecret, sessionTtlSeconds), secureCookie, sessionTtlSeconds),
+    );
+  const playerOf = (request: FastifyRequest) => verifySessionToken(sessionToken(request), sessionSecret);
+  const resume = async (request: FastifyRequest) => {
+    const playerId = playerOf(request);
+    return playerId === null ? null : lobby.resume(playerId);
+  };
 
   // For the platform's health check: the API is up and answering.
   app.get("/api/health", async () => ({ status: "ok" }));
@@ -90,7 +113,7 @@ export function buildServer(lobby: Lobby, { logger = true, secureCookie = false 
     if (!result.ok) return reply.code(422).send(result);
 
     const { player, code } = result;
-    return reply.header("set-cookie", cookie(result.token)).code(201).send({ player, code });
+    return openSession(reply, player.id).code(201).send({ player, code });
   });
 
   // Signing in again, here or in another browser, with the player's code.
@@ -98,24 +121,24 @@ export function buildServer(lobby: Lobby, { logger = true, secureCookie = false 
     const result = await lobby.signIn(request.body?.code);
     if (!result.ok) return reply.code(401).send(result);
 
-    return reply.header("set-cookie", cookie(result.token)).code(201).send({ player: result.player });
+    return openSession(reply, result.player.id).code(201).send({ player: result.player });
   });
 
   app.get("/api/session", async (request, reply) => {
-    const session = await lobby.resume(sessionToken(request));
+    const session = await resume(request);
     if (session === null) return reply.code(401).send({ reason: "NO_SESSION" });
     return { player: session.player };
   });
 
-  app.delete("/api/session", async (request, reply) => {
-    const closed = await lobby.signOut(sessionToken(request));
-    return reply.header("set-cookie", cookie("", 0)).code(closed ? 204 : 401).send();
-  });
+  // Only this browser forgets the session; the token itself expires on its own.
+  app.delete("/api/session", async (_request, reply) =>
+    reply.header("set-cookie", sessionCookie("", secureCookie, 0)).code(204).send(),
+  );
 
   // Every other route plays on the Game of the player in session.
   app.register(async (scoped) => {
     scoped.addHook("preHandler", async (request, reply) => {
-      const session = await lobby.resume(sessionToken(request));
+      const session = await resume(request);
       if (session === null) return reply.code(401).send({ reason: "NO_SESSION" });
       request.game = session.game;
     });

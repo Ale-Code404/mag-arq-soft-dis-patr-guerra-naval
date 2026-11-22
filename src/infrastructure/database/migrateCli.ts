@@ -1,11 +1,5 @@
-import { connect } from "./connect";
-import { migrate } from "./migrate";
+import { setUpDatabase } from "./setup";
 
-// npm run migrate: applies the pending migrations without starting the API.
-const pool = connect();
-try {
-  const applied = await migrate(pool);
-  console.log(applied.length === 0 ? "No pending migrations." : `Applied: ${applied.join(", ")}`);
-} finally {
-  await pool.end();
-}
+// npm run migrate: the API's user and the pending migrations, without the API.
+const applied = await setUpDatabase();
+console.log(applied.length === 0 ? "No pending migrations." : `Applied: ${applied.join(", ")}`);

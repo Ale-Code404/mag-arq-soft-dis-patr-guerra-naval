@@ -24,6 +24,7 @@ const rejectionText: Record<string, string> = {
   INVALID_MATCH: "La partida guardada no se puede leer o su contenido no es válido.",
   NO_REPLAY: "No hay ninguna partida cargada.",
   NO_SUCH_TURN: "Ese turno no existe.",
+  TOO_MANY_REQUESTS: "Demasiadas peticiones seguidas; espera un momento.",
 };
 
 function show(error: unknown) {

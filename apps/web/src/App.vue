@@ -101,6 +101,7 @@ const rejectionText: Record<Rejection, string> = {
   NO_SUCH_TURN: "Ese turno no existe.",
   NO_SESSION: "Tu sesión terminó; vuelve a entrar con tu código.",
   INVALID_CODE: "Ese código no corresponde a ningún jugador.",
+  TOO_MANY_REQUESTS: "Demasiados intentos seguidos; espera un momento y vuelve a intentarlo.",
   INVALID_NAME: "El nombre debe tener entre 1 y 30 caracteres.",
 };
 
