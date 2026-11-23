@@ -4,7 +4,6 @@ import { Coordinate } from "../shared/Coordinate";
 import { Weapon } from "./Weapon";
 import { WeaponType } from "./WeaponType";
 
-// Missile 1 x 1, bomb 2 x 2 and attack plane 1 x 3 only differ in size (D-16).
 export class AreaWeapon extends Weapon {
   rows: number;
   columns: number;
