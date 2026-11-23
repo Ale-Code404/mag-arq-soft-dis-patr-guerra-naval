@@ -18,6 +18,7 @@ const BASE_DURATION: Record<WeaponType, number> = {
   BOMBER: 700,
   TORPEDO: 600,
   RECON_PLANE: 1100,
+  NUKE: 1300,
 };
 
 // Delay between consecutive cells of the bomber's sweep and the torpedo's run.

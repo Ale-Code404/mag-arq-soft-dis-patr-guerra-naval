@@ -40,6 +40,7 @@ export const weaponName: Record<WeaponType, string> = {
   BOMBER: "Avión de ataque",
   TORPEDO: "Torpedo",
   RECON_PLANE: "Reconocimiento",
+  NUKE: "Bomba nuclear",
 };
 
 export const weaponArea: Record<WeaponType, string> = {
@@ -48,6 +49,7 @@ export const weaponArea: Record<WeaponType, string> = {
   BOMBER: "1 × 3 horizontal",
   TORPEDO: "Fila completa, primer barco",
   RECON_PLANE: "3 × 3, sin daño",
+  NUKE: "3 × 3",
 };
 
 export const weaponGlyph: Record<WeaponType, string> = {
@@ -56,6 +58,7 @@ export const weaponGlyph: Record<WeaponType, string> = {
   BOMBER: "✈",
   TORPEDO: "➤",
   RECON_PLANE: "◎",
+  NUKE: "☢",
 };
 
 export const difficultyName: Record<Difficulty, string> = { EASY: "Fácil", NORMAL: "Normal", HARD: "Difícil" };

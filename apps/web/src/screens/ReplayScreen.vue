@@ -2,14 +2,14 @@
 import { computed } from "vue";
 import BoardGrid from "../components/BoardGrid.vue";
 import { describeTurn, formatDate, winnerName } from "../game/labels";
-import { shipsFromBoard } from "../game/ships";
+import { toShape } from "../game/ships";
 import { useGame } from "../game/useGame";
 
 const game = useGame();
 const replay = computed(() => game.replay.value!);
 const atEnd = computed(() => replay.value.turn === replay.value.totalTurns);
-const playerShips = computed(() => shipsFromBoard(replay.value.playerBoard, true));
-const opponentShips = computed(() => shipsFromBoard(replay.value.opponentBoard, true));
+const playerShips = computed(() => replay.value.playerShips.map(toShape));
+const opponentShips = computed(() => replay.value.opponentShips.map(toShape));
 const progress = computed(() => (replay.value.totalTurns === 0 ? 100 : (replay.value.turn / replay.value.totalTurns) * 100));
 </script>
 

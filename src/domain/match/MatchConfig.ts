@@ -53,6 +53,7 @@ export class MatchConfig {
         [WeaponType.BOMBER, 2],
         [WeaponType.RECON_PLANE, 2],
         [WeaponType.TORPEDO, 1],
+        [WeaponType.NUKE, 1],
       ],
     });
   }

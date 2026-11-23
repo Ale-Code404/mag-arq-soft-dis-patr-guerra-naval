@@ -27,6 +27,8 @@ export class WeaponFactory {
         return new Torpedo(ammo);
       case WeaponType.RECON_PLANE:
         return new ReconPlane(ammo, RECON_REVEAL_SECONDS);
+      case WeaponType.NUKE:
+        return new AreaWeapon(WeaponType.NUKE, ammo, 3, 3);
     }
   }
 

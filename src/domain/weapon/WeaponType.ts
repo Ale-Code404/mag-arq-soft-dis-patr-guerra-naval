@@ -6,4 +6,5 @@ export enum WeaponType {
   BOMBER = "BOMBER",
   TORPEDO = "TORPEDO",
   RECON_PLANE = "RECON_PLANE",
+  NUKE = "NUKE",
 }
