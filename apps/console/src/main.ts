@@ -39,6 +39,7 @@ const weaponName: Record<string, string> = {
   BOMBER: "Avión de ataque",
   TORPEDO: "Torpedo",
   RECON_PLANE: "Avión de reconocimiento",
+  NUKE: "Bomba nuclear",
 };
 
 const phaseName: Record<MatchView["phase"], string> = {
@@ -132,7 +133,8 @@ function describeTurn(turn: TurnView): string {
     return `${who}: ${where} → barcos en: ${spotted.length > 0 ? spotted.join(", ") : "ninguna casilla"}`;
   }
   const hits = turn.outcomes.filter((o) => o.result === "HIT").length;
-  return `${who}: ${where} → ${hits === 0 ? "agua" : `${hits} ${hits === 1 ? "impacto" : "impactos"}`}`;
+  const sunk = (turn.sunkShips ?? []).map((ship) => `¡barco de ${ship.length} hundido!`).join(" ");
+  return `${who}: ${where} → ${hits === 0 ? "agua" : `${hits} ${hits === 1 ? "impacto" : "impactos"}`}${sunk ? ` ${sunk}` : ""}`;
 }
 
 function describeConfig(config: MatchConfig): string {

@@ -29,6 +29,7 @@ export type TurnView = {
   weapon: string;
   target: Position;
   outcomes: (Position & { result: OutcomeType })[];
+  sunkShips: { length: number }[];
 };
 export type ActionResult = { ok: true; match: MatchView; turns: TurnView[]; saved?: boolean };
 export type MatchConfig = {
