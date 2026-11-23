@@ -1,4 +1,5 @@
 import { Board } from "../board/Board";
+import { Ship } from "../fleet/Ship";
 import { Coordinate } from "../shared/Coordinate";
 import { CellOutcome } from "../weapon/CellOutcome";
 import { OutcomeType } from "../weapon/OutcomeType";
@@ -21,6 +22,8 @@ export type ReplayFrame = {
   boards: Record<ReplaySide, Board>;
   // The turn that led here, or null at the initial state.
   last: ReplayTurn | null;
+  // The ships that turn sank.
+  lastSunk: Ship[];
 };
 
 // CU-10: a finished match walked turn by turn. The initial boards are kept as
@@ -47,16 +50,19 @@ export class Replay {
       OPPONENT: this.initialBoards.OPPONENT.clone(),
     };
 
-    for (const played of this.turns.slice(0, turn)) {
+    let lastSunk: Ship[] = [];
+    for (const [index, played] of this.turns.slice(0, turn).entries()) {
       const rival = boards[played.side === "PLAYER" ? "OPPONENT" : "PLAYER"];
+      const afloat = index === turn - 1 ? rival.ships().filter((ship) => !ship.isSunk()) : [];
       for (const outcome of played.outcomes) {
         // Recon outcomes (SPOTTED, CLEAR) leave the cell as it was (D-17).
         if (outcome.result === OutcomeType.HIT || outcome.result === OutcomeType.MISS) {
           rival.cellAt(outcome.position)!.receiveAttack();
         }
       }
+      lastSunk = afloat.filter((ship) => ship.isSunk());
     }
 
-    return { turn, boards, last: turn === 0 ? null : this.turns[turn - 1] };
+    return { turn, boards, last: turn === 0 ? null : this.turns[turn - 1], lastSunk };
   }
 }

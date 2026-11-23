@@ -94,6 +94,7 @@ export class Match {
   // One turn of either side, recorded as its snapshot (RF-11).
   playTurn(player: Player, rival: Player, request?: ShotRequest): MatchResult<{ turn: Turn }> {
     const startedAt = this.clock();
+    const afloat = rival.fleet.ships.filter((ship) => !ship.isSunk());
     const shot = player.takeTurn(rival, request);
     if (!shot.fired) return { ok: false, rejection: shot.rejection };
 
@@ -105,6 +106,7 @@ export class Match {
       shot.outcomes,
       startedAt,
       this.clock(),
+      afloat.filter((ship) => ship.isSunk()),
     );
     this.turns.push(turn);
 

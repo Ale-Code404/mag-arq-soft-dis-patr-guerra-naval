@@ -4,6 +4,7 @@ import { Match } from "../domain/match/Match";
 import { MatchPhase } from "../domain/match/MatchPhase";
 import { Turn } from "../domain/match/Turn";
 import { Orientation } from "../domain/fleet/Orientation";
+import { Ship } from "../domain/fleet/Ship";
 import { Player } from "../domain/player/Player";
 import { ReplayFrame, ReplayTurn } from "../domain/replay/Replay";
 import { OutcomeType } from "../domain/weapon/OutcomeType";
@@ -39,8 +40,19 @@ export type ShipView = {
   length: number;
   placed: boolean;
   sunk: boolean;
+  hits: number;
   origin: { row: number; column: number } | null;
   orientation: Orientation | null;
+};
+
+// A placed ship and how it stands: where it is, how many hits it took and
+// whether it sank. Clients draw and announce ships from it.
+export type ShipStateView = {
+  length: number;
+  origin: { row: number; column: number };
+  orientation: Orientation;
+  hits: number;
+  sunk: boolean;
 };
 
 export type TurnView = {
@@ -50,6 +62,8 @@ export type TurnView = {
   target: { row: number; column: number };
   // Recon outcomes (SPOTTED, CLEAR) are shown for 10 seconds by the client (D-17).
   outcomes: { row: number; column: number; result: OutcomeType }[];
+  // The rival ships this turn sank.
+  sunkShips: ShipStateView[];
 };
 
 export type MatchView = {
@@ -59,6 +73,8 @@ export type MatchView = {
   rivalBoard: BoardView;
   fleet: ShipView[];
   rivalShipsAfloat: number;
+  // Only the sunk rival ships: their shape is known once they go down.
+  rivalSunkShips: ShipStateView[];
   arsenal: WeaponView[];
   // CU-06, steps 2 and 4.
   winner: Side | null;
@@ -76,10 +92,12 @@ export function toMatchView(match: Match): MatchView {
       length: ship.length,
       placed: ship.isPlaced(),
       sunk: ship.isSunk(),
+      hits: ship.hits,
       origin: ship.origin === null ? null : { row: ship.origin.row, column: ship.origin.column },
       orientation: ship.orientation,
     })),
     rivalShipsAfloat: bot.fleet.ships.filter((ship) => !ship.isSunk()).length,
+    rivalSunkShips: toShipStates(bot.fleet.ships.filter((ship) => ship.isSunk())),
     arsenal: toArsenalView(human),
     winner: match.winner === null ? null : sideOf(match, match.winner),
     turnsPlayed: match.turns.length,
@@ -97,7 +115,20 @@ export function toTurnViews(match: Match, turns: Turn[]): TurnView[] {
       column: outcome.position.column,
       result: outcome.result,
     })),
+    sunkShips: toShipStates(turn.sunk),
   }));
+}
+
+function toShipStates(ships: Ship[]): ShipStateView[] {
+  return ships
+    .filter((ship) => ship.origin !== null && ship.orientation !== null)
+    .map((ship) => ({
+      length: ship.length,
+      origin: { row: ship.origin!.row, column: ship.origin!.column },
+      orientation: ship.orientation!,
+      hits: ship.hits,
+      sunk: ship.isSunk(),
+    }));
 }
 
 // CU-10, step 3: the match is over, so both fleets are visible.
@@ -112,6 +143,8 @@ export type ReplayView = {
   opponentBoard: BoardView;
   // The turn that led to this state, with its recon outcomes (D-17).
   lastTurn: TurnView | null;
+  playerShips: ShipStateView[];
+  opponentShips: ShipStateView[];
 };
 
 export function toReplayView(
@@ -129,11 +162,13 @@ export function toReplayView(
     totalTurns,
     playerBoard: toBoardView(frame.boards.PLAYER, true),
     opponentBoard: toBoardView(frame.boards.OPPONENT, true),
-    lastTurn: frame.last === null ? null : toReplayTurnView(frame.last),
+    lastTurn: frame.last === null ? null : toReplayTurnView(frame.last, frame.lastSunk),
+    playerShips: toShipStates(frame.boards.PLAYER.ships()),
+    opponentShips: toShipStates(frame.boards.OPPONENT.ships()),
   };
 }
 
-function toReplayTurnView(turn: ReplayTurn): TurnView {
+function toReplayTurnView(turn: ReplayTurn, sunk: Ship[]): TurnView {
   return {
     number: turn.number,
     side: turn.side,
@@ -144,6 +179,7 @@ function toReplayTurnView(turn: ReplayTurn): TurnView {
       column: outcome.position.column,
       result: outcome.result,
     })),
+    sunkShips: toShipStates(sunk),
   };
 }
 
