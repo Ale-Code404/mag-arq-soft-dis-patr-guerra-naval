@@ -2,7 +2,7 @@
 // the JSON the API answers with, so they live here, on the client side.
 export type Difficulty = "EASY" | "NORMAL" | "HARD";
 export type FirstTurn = "HUMAN" | "BOT" | "RANDOM";
-export type WeaponType = "MISSILE" | "BOMB" | "BOMBER" | "TORPEDO" | "RECON_PLANE";
+export type WeaponType = "MISSILE" | "BOMB" | "BOMBER" | "TORPEDO" | "RECON_PLANE" | "NUKE";
 export type CellState = "EMPTY" | "SHIP" | "MISS" | "HIT" | "SUNK";
 export type MatchPhase = "PLACEMENT" | "IN_PROGRESS" | "FINISHED";
 export type Orientation = "HORIZONTAL" | "VERTICAL";
@@ -31,8 +31,18 @@ export type ShipView = {
   length: number;
   placed: boolean;
   sunk: boolean;
+  hits: number;
   origin: Position | null;
   orientation: Orientation | null;
+};
+
+// A placed ship and how it stands, as the API reports it.
+export type ShipStateView = {
+  length: number;
+  origin: Position;
+  orientation: Orientation;
+  hits: number;
+  sunk: boolean;
 };
 
 export type MatchView = {
@@ -41,6 +51,7 @@ export type MatchView = {
   rivalBoard: BoardView;
   fleet: ShipView[];
   rivalShipsAfloat: number;
+  rivalSunkShips: ShipStateView[];
   // ammo null means unlimited.
   arsenal: { type: WeaponType; ammo: number | null; damaging: boolean }[];
   winner: Side | null;
@@ -53,6 +64,7 @@ export type TurnView = {
   weapon: WeaponType;
   target: Position;
   outcomes: (Position & { result: OutcomeType })[];
+  sunkShips: ShipStateView[];
 };
 
 // Answer of every action on a match (CU-03, CU-04, CU-06).
@@ -71,6 +83,8 @@ export type ReplayView = {
   playerBoard: BoardView;
   opponentBoard: BoardView;
   lastTurn: TurnView | null;
+  playerShips: ShipStateView[];
+  opponentShips: ShipStateView[];
 };
 
 // CU-07. precision null means «sin disparos» (2a).

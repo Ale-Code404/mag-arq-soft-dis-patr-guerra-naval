@@ -151,6 +151,10 @@ export function createSoundboard() {
       tone(0, { from: 1180, to: 1160, type: "sine", peak: 0.3, attack: 0.01, decay: 0.9 });
       tone(0.35, { from: 1180, to: 1160, type: "sine", peak: 0.08, attack: 0.01, decay: 0.7 });
     },
+    NUKE: () => {
+      tone(0, { from: 220, to: 880, type: "sawtooth", peak: 0.08, attack: 0.3, decay: 0.25 });
+      tone(0, { from: 1800, to: 300, type: "sine", peak: 0.16, attack: 0.02, decay: 0.5 });
+    },
   };
 
   // Plays a recorded sample; false when it is not loaded, so the caller synthesizes.
@@ -201,7 +205,8 @@ export function createSoundboard() {
     }
     if (played.outcomes.some((o) => o.result === "HIT")) {
       const recorded = played.weapon === "MISSILE" && sample("missileImpact", at);
-      if (!recorded) explosion(at, played.weapon === "BOMB");
+      if (!recorded) explosion(at, played.weapon === "BOMB" || played.weapon === "NUKE");
+      if (played.weapon === "NUKE") sunk(at + 0.1);
     } else splash(at);
     if (sank) sunk(at + 0.35);
   }

@@ -3,7 +3,6 @@ import {
   api,
   ApiError,
   type ActionResult,
-  type BoardView,
   type FinishedMatchSummary,
   type MatchConfig,
   type MatchStatistics,
@@ -22,7 +21,6 @@ import { canAttack, weaponArea } from "../areas";
 import { cellKey } from "../coordinates";
 import { turnEffect, type CellEffect } from "../effects";
 import { rejectionText } from "./labels";
-import { shipsFromBoard, type ShipShape } from "./ships";
 import { createSoundboard } from "./sound";
 
 // D-17: recon results stay visible for 10 seconds.
@@ -45,40 +43,6 @@ function shipCells(ship: ShipView): string[] {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const shipKeys = (ship: ShipShape) =>
-  shipPositions(ship.length, { row: ship.row, column: ship.column }, ship.orientation).map(cellKey);
-
-function attackedKeys(board: BoardView | undefined): Set<string> {
-  const keys = new Set<string>();
-  board?.cells.forEach((row, r) =>
-    row.forEach((state, c) => (state === "HIT" || state === "SUNK") && keys.add(cellKey({ row: r, column: c }))),
-  );
-  return keys;
-}
-
-// The API only says HIT or MISS, so the turn that sank a ship is found by
-// replaying the hits: a ship sunk on the final board went down on the turn
-// whose hit completed its cells. It holds when the opponent chains turns.
-export function sinkingTurns(turns: TurnView[], before: MatchView | null, after: MatchView): Set<number> {
-  const sinking = new Set<number>();
-  for (const side of ["PLAYER", "OPPONENT"] as const) {
-    const board = (view: MatchView) => (side === "PLAYER" ? view.rivalBoard : view.ownBoard);
-    const attacked = attackedKeys(before ? board(before) : undefined);
-    const pending = shipsFromBoard(board(after), false).filter((ship) => !shipKeys(ship).every((k) => attacked.has(k)));
-    for (const turn of turns.filter((t) => t.side === side)) {
-      turn.outcomes.filter((o) => o.result === "HIT").forEach((o) => attacked.add(cellKey(o)));
-      for (const ship of [...pending]) {
-        if (!shipKeys(ship).every((k) => attacked.has(k))) continue;
-        sinking.add(turn.number);
-        pending.splice(pending.indexOf(ship), 1);
-      }
-    }
-  }
-  return sinking;
-}
-
-const sunkCells = (board: BoardView) => board.cells.flat().filter((state) => state === "SUNK").length;
 
 function createGame() {
   const ready = ref(false);
@@ -203,7 +167,6 @@ function createGame() {
   }
 
   function apply(result: ActionResult) {
-    const before = match.value;
     match.value = result.match;
     turns.value.push(...result.turns);
     if (result.saved !== undefined) saved.value = result.saved;
@@ -214,13 +177,13 @@ function createGame() {
     }
     if (result.turns.length === 0) return;
     const finished = result.match.phase === "FINISHED" ? result.match.winner === "PLAYER" : null;
-    present(result.turns, result.match.ownBoard.size, sinkingTurns(result.turns, before, result.match), finished);
+    present(result.turns, result.match.ownBoard.size, finished);
   }
 
   // One turn at a time, each followed by a pause; shooting stays locked until
   // the last one, the opponent's answer included, has been shown.
   // won: null while the match goes on; otherwise the finale plays at the end.
-  function present(played: TurnView[], boardSize: number, sinking: Set<number>, won: boolean | null) {
+  function present(played: TurnView[], boardSize: number, won: boolean | null) {
     const id = playbackId;
     animating.value = true;
     playback = playback.then(async () => {
@@ -228,7 +191,7 @@ function createGame() {
         if (id !== playbackId) return;
         playingSide.value = turn.side;
         const { cells, duration } = turnEffect(turn, boardSize);
-        sound.turn(turn, reducedMotion ? 300 : duration * 0.45, sinking.has(turn.number));
+        sound.turn(turn, reducedMotion ? 300 : duration * 0.45, turn.sunkShips.length > 0);
         if (!reducedMotion) {
           const target = turn.side === "PLAYER" ? rivalEffects : ownEffects;
           target.value = new Map();
@@ -430,8 +393,7 @@ function createGame() {
       const next = await api.replayAt(turn);
       replay.value = next;
       if (turn !== previous.turn + 1 || !next.lastTurn) return;
-      const target = (view: ReplayView) => (next.lastTurn!.side === "PLAYER" ? view.opponentBoard : view.playerBoard);
-      sound.turn(next.lastTurn, 250, sunkCells(target(next)) > sunkCells(target(previous)));
+      sound.turn(next.lastTurn, 250, next.lastTurn.sunkShips.length > 0);
       if (next.turn === next.totalTurns) sound.finale(next.winner === "PLAYER", 1200);
     });
   }

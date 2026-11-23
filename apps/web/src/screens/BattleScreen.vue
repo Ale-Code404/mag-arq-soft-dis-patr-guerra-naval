@@ -5,7 +5,7 @@ import BoardGrid from "../components/BoardGrid.vue";
 import FleetDock from "../components/FleetDock.vue";
 import ResultDialog from "../components/ResultDialog.vue";
 import TurnLog from "../components/TurnLog.vue";
-import { shipsFromBoard } from "../game/ships";
+import { fleetShapes, toShape } from "../game/ships";
 import { useGame } from "../game/useGame";
 
 const game = useGame();
@@ -13,8 +13,8 @@ const match = computed(() => game.match.value!);
 const placing = computed(() => match.value.phase === "PLACEMENT");
 const fighting = computed(() => match.value.phase === "IN_PROGRESS");
 const rivalTurn = computed(() => fighting.value && game.playingSide.value === "OPPONENT");
-const ownShips = computed(() => shipsFromBoard(match.value.ownBoard, true));
-const rivalShips = computed(() => shipsFromBoard(match.value.rivalBoard, false));
+const ownShips = computed(() => fleetShapes(match.value.fleet));
+const rivalShips = computed(() => match.value.rivalSunkShips.map(toShape));
 
 // The wheel over the own board turns the ship while placing, instead of scrolling.
 function onWheel(event: WheelEvent) {

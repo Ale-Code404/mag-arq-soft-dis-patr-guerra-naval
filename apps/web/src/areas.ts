@@ -7,6 +7,7 @@ const AREA: Record<Exclude<WeaponType, "TORPEDO">, { rows: number; columns: numb
   BOMB: { rows: 2, columns: 2 },
   BOMBER: { rows: 1, columns: 3 },
   RECON_PLANE: { rows: 3, columns: 3 },
+  NUKE: { rows: 3, columns: 3 },
 };
 
 // The cells covered inside the board, column by column, and whether the whole
